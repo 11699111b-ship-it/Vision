@@ -1,0 +1,97 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 7: Electric & Neon (Retro-Futurism / Cyberpunk Custom)",
+  "colors": {
+    "background": "#050505",
+    "surface": "#111111",
+    "primary_neon_green": "#39FF14",
+    "wireframe_electric_blue": "#00E5FF",
+    "alert_red": "#FF3B30",
+    "text_muted": "#8B8B8D",
+    "text_main": "#FFFFFF"
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Orbitron",
+      "body": "Space Mono"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl tracking-tighter uppercase",
+      "h2": "text-2xl sm:text-3xl uppercase tracking-tight",
+      "h3": "text-xl uppercase",
+      "body": "text-base leading-relaxed",
+      "labels": "text-xs tracking-[0.2em] uppercase text-[#8B8B8D]"
+    }
+  },
+  "layout_spacing": {
+    "generous_spacing": "p-6 md:p-8",
+    "container_style": "border border-[#00E5FF]/30 bg-[#111111]",
+    "grid_planning_mode": "grid grid-cols-1 lg:grid-cols-10 gap-8 h-full"
+  },
+  "components": {
+    "building_cutaway": {
+      "description": "Pure HTML + Tailwind grid. 6 floors, 2-3 rooms per floor.",
+      "styles": {
+        "room_default": "border border-[#00E5FF]/40 bg-[#111111]/50 text-[#00E5FF] transition-all",
+        "room_active": "border-[#39FF14] bg-[#39FF14]/10 text-[#39FF14] shadow-[0_0_15px_rgba(57,255,20,0.3)]"
+      }
+    },
+    "progress_ring": {
+      "description": "Framer Motion SVG ring in Active Tracking Mode.",
+      "styles": "Stroke color #39FF14, Track color #00E5FF/20, glowing drop shadow on stroke."
+    },
+    "mascot_volt": {
+      "description": "Fixed bottom-right robotic AI assistant (Lucide 'Bot' icon). Provides voice/text feedback.",
+      "styles": "bg-[#111111] border border-[#00E5FF] text-[#00E5FF] p-4 flex items-center gap-4 shadow-[0_0_20px_rgba(0,229,255,0.2)]"
+    },
+    "forms_and_inputs": {
+      "description": "Shadcn components heavily customized.",
+      "styles": "bg-transparent border-b border-[#00E5FF]/50 focus:border-[#39FF14] focus:ring-0 rounded-none text-white outline-none"
+    },
+    "buttons": {
+      "styles": {
+        "primary": "bg-[#39FF14] text-black font-bold uppercase tracking-wider hover:bg-[#39FF14]/80 hover:shadow-[0_0_15px_#39FF14] transition-all",
+        "secondary": "border border-[#00E5FF] text-[#00E5FF] bg-transparent hover:bg-[#00E5FF]/10 transition-all uppercase"
+      }
+    }
+  },
+  "pages_views": [
+    {
+      "name": "Welcome Screen",
+      "features": "Hero view, 'ENTER HQ' button, cyberpunk city bg image overlaid with #050505/80 to ensure text readability."
+    },
+    {
+      "name": "Planning Mode",
+      "features": "Left col-span-4 (2D Cutaway Skyscraper with 6 floors), Right col-span-6 (Command Center with Master Blueprint accordions and Custom Quest Engine forms)."
+    },
+    {
+      "name": "Active Tracking Mode",
+      "features": "Minimalist dark protocol view. Huge central progress ring, streak counter, buffer day badges, and daily/weekly task lists. Clean, focused."
+    },
+    {
+      "name": "HQ Visit Mode",
+      "features": "Full-screen building view with glowing active rooms. 'Return to Protocol' button. Building admiration focus."
+    }
+  ],
+  "motion_accessibility": {
+    "mascot_animation": "Framer Motion: y: [-5, 5] infinite loop duration 2s ease-in-out.",
+    "page_transitions": "Framer Motion: initial opacity 0, scale 0.98. animate opacity 1, scale 1.",
+    "celebration": "react-confetti triggered on perfect week / weekly mission submission.",
+    "data_testid": "MANDATORY on all interactive elements using kebab-case role-based naming (e.g., 'enter-hq-button', 'room-quest-form', 'nav-planning-mode')."
+  },
+  "media": {
+    "welcome_bg": "https://images.unsplash.com/photo-1728457848586-fc2c468b4689?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxjeWJlcnB1bmslMjBkYXJrJTIwY2l0eSUyMG5lb24lMjBncmVlbiUyMGJsdWV8ZW58MHx8fHwxNzc2MTA2ODgxfDA&ixlib=rb-4.1.0&q=85",
+    "mascot_fallback_icon": "lucide-react 'Bot' or 'Cpu'"
+  },
+  "instructions_to_main_agent": [
+    "Install and import 'Orbitron' and 'Space Mono' from Google Fonts in index.html or global CSS.",
+    "Implement the strict color palette EXACTLY as specified: background #050505, surface #111111, primary #39FF14, wireframe #00E5FF.",
+    "Do not use generic 'Inter' font or rounded soft UI (no rounded-full or heavy radius). Keep borders sharp or max 2px rounded. This is a retro-futuristic terminal command center.",
+    "The 2D Skyscraper must visually represent a cutaway building (like Fallout Shelter) with electric blue structural wireframes. Rooms light up neon green when quests inside are active.",
+    "Use Framer Motion for the progress ring in Tracking Mode and the floating animation of Volt.",
+    "Volt Mascot must be implemented as a fixed or absolutely positioned element on the bottom-right, acting as an AI assistant providing feedback.",
+    "Implement the logic for EP (max 20), XP, level system (Civilian -> Sidekick -> Hero -> Legend), and base upkeep tax.",
+    "Ensure all state is persisted to localStorage.",
+    "You MUST add data-testid attributes to all buttons, form inputs, toggles, and critical UI elements for automated testing."
+  ]
+}

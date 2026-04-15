@@ -1,0 +1,12 @@
+/* App.css - Superhero HQ */
+/* All major styles are in index.css with Tailwind */
+/* This file holds any additional overrides */
+
+/* Ensure smooth transitions on all interactive elements */
+button { transition: all 0.15s ease; }
+
+/* Prevent text selection during interactions */
+button, [role="button"] { user-select: none; -webkit-user-select: none; }
+
+/* Framer Motion page wrapper */
+.motion-page { width: 100%; height: 100%; }
