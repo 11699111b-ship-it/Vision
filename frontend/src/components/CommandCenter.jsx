@@ -7,79 +7,117 @@ import { FOUNDER_GRIND, RECOVERY_WEEK } from '../data/loadouts';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
-// ── Quest card ─────────────────────────────────────────────────────────────────
-// Parent Goal = primary bold text (top); Quest action = muted secondary (below)
-function QuestCard({ quest, goal, isSelected, isLocked, onToggle }) {
+// ── Quest card — shows only the specific ACTIVITY (quest.text) as primary ──────
+function QuestCard({ quest, isSelected, isLocked, onToggle }) {
   const freqColor = FREQ_COLORS[quest.frequency] || '#8B8B8D';
   return (
     <motion.div
       data-testid={`quest-${quest.id}-checkbox`}
-      className="flex items-center gap-3 px-3 py-3 cursor-pointer"
+      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
       style={{
-        background: isSelected ? 'rgba(57,255,20,0.05)' : 'rgba(255,255,255,0.018)',
-        borderRadius: 10,
-        border: `1px solid ${isSelected ? 'rgba(57,255,20,0.32)' : 'rgba(255,255,255,0.045)'}`,
-        marginBottom: 6,
+        background: isSelected ? 'rgba(57,255,20,0.05)' : 'transparent',
+        borderRadius: 8,
+        border: `1px solid ${isSelected ? 'rgba(57,255,20,0.28)' : 'rgba(255,255,255,0.035)'}`,
+        marginBottom: 4,
         opacity: isLocked ? 0.28 : 1,
         pointerEvents: isLocked ? 'none' : 'auto',
         transition: 'border-color 0.15s, background 0.15s',
+        marginLeft: 8,
       }}
       onClick={() => { if (!isLocked) { boop(); onToggle(quest.id); } }}
       whileTap={!isLocked ? { scale: 0.99 } : {}}
     >
-      {/* Text — Parent Goal (primary) + Quest action (secondary) */}
+      {/* Activity text — this is what you DO */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: isSelected ? '#ffffff' : '#c8c8c8',
+          fontSize: 12,
+          fontWeight: isSelected ? 600 : 400,
+          color: isSelected ? '#e8e8e8' : 'rgba(255,255,255,0.52)',
           margin: 0,
-          lineHeight: 1.35,
-          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
-        }}>
-          {goal.name}
-        </p>
-        <p style={{
-          fontSize: 11,
-          color: 'rgba(255,255,255,0.38)',
-          margin: '3px 0 0',
-          fontFamily: 'system-ui, sans-serif',
           lineHeight: 1.4,
-          overflow: 'hidden',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
         }}>
           {quest.text}
         </p>
       </div>
 
-      {/* Right: freq + EP + circle */}
+      {/* Right: freq badge + circle */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <span style={{
-          fontSize: 10,
+          fontSize: 9,
           color: freqColor,
           fontFamily: 'Space Mono, monospace',
           border: `1px solid ${freqColor}30`,
-          padding: '1px 5px',
+          padding: '1px 4px',
           borderRadius: 3,
         }}>
           {quest.frequency[0]}
         </span>
-        <span style={{ fontSize: 11, color: '#555', fontFamily: 'Space Mono, monospace' }}>
-          {goal.epCost}EP
-        </span>
         <div style={{
-          width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-          border: `1.5px solid ${isSelected ? '#39FF14' : 'rgba(255,255,255,0.18)'}`,
+          width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+          border: `1.5px solid ${isSelected ? '#39FF14' : 'rgba(255,255,255,0.16)'}`,
           background: isSelected ? '#39FF14' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.15s',
         }}>
-          {isSelected && <Check size={10} color="#000" strokeWidth={3.5} />}
+          {isSelected && <Check size={9} color="#000" strokeWidth={3.5} />}
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ── Goal group — header row + indented quest cards ─────────────────────────────
+function GoalGroup({ goal, isLocked, activeSprint, onToggle }) {
+  const selectedCount = goal.quests.filter(q => activeSprint.selectedQuestIds.includes(q.id)).length;
+  const hasSelection = selectedCount > 0;
+  const tagColor = goal.tag === 'Big Missions' ? '#FFA500' : goal.tag === 'Daily Power-Up' ? '#39FF14' : '#00E5FF';
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      {/* Goal header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '5px 6px 5px 2px',
+        borderBottom: `1px solid rgba(255,255,255,${hasSelection ? '0.08' : '0.04'})`,
+        marginBottom: 4,
+      }}>
+        {/* Active indicator dot */}
+        {hasSelection && (
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#39FF14', boxShadow: '0 0 4px #39FF14', flexShrink: 0 }} />
+        )}
+        <span style={{
+          fontSize: 12, fontWeight: 700, flex: 1,
+          color: hasSelection ? '#ffffff' : 'rgba(255,255,255,0.62)',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          lineHeight: 1.3,
+        }}>
+          {goal.name}
+        </span>
+        {selectedCount > 0 && (
+          <span style={{ fontSize: 9, color: '#39FF14', fontFamily: 'Space Mono, monospace' }}>
+            {selectedCount}/{goal.quests.length}
+          </span>
+        )}
+        <span style={{
+          fontSize: 9, color: tagColor, fontFamily: 'Space Mono, monospace',
+          border: `1px solid ${tagColor}25`, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
+        }}>
+          {goal.epCost}EP
+        </span>
+      </div>
+
+      {/* Quest cards — indented */}
+      {goal.quests.map(quest => (
+        <QuestCard
+          key={quest.id}
+          quest={quest}
+          isSelected={activeSprint.selectedQuestIds.includes(quest.id)}
+          isLocked={isLocked || goal.tag === 'Locked'}
+          onToggle={onToggle}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -202,21 +240,18 @@ function RoomSection({ floor, room }) {
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.18 }}
-            style={{ overflow: 'hidden', padding: '0 12px 8px' }}
+            style={{ overflow: 'hidden', padding: '4px 12px 8px' }}
           >
-            {/* Flat quest list — goal name shown in subtitle of each card */}
-            {allGoals.map(goal =>
-              goal.quests.map(quest => (
-                <QuestCard
-                  key={quest.id}
-                  quest={quest}
-                  goal={goal}
-                  isSelected={activeSprint.selectedQuestIds.includes(quest.id)}
-                  isLocked={room.locked || goal.tag === 'Locked'}
-                  onToggle={handleToggle}
-                />
-              ))
-            )}
+            {/* Goals grouped with header + indented quests */}
+            {allGoals.map(goal => (
+              <GoalGroup
+                key={goal.id}
+                goal={goal}
+                isLocked={room.locked}
+                activeSprint={activeSprint}
+                onToggle={handleToggle}
+              />
+            ))}
 
             <AnimatePresence>
               {showCustomForm && (

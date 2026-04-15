@@ -36,57 +36,57 @@ function MusicBtn() {
 }
 
 // ── Minimalist Selected Tasks Receipt (below building) ─────────────────────────
+// Shows the SPECIFIC ACTIVITY (quest.text) grouped under each goal heading
 function SelectedTasksReceipt() {
   const { activeSprint, questLookup } = useAppContext();
   const { selectedQuestIds } = activeSprint;
 
   if (selectedQuestIds.length === 0) return null;
 
-  // Deduplicate: show unique parent goal names only
-  const seen = new Set();
-  const goalNames = [];
+  // Group quests by parent goal
+  const goalMap = new Map();
   for (const id of selectedQuestIds) {
-    const name = questLookup[id]?.goal.name;
-    if (name && !seen.has(name)) {
-      seen.add(name);
-      goalNames.push(name);
-    }
+    const entry = questLookup[id];
+    if (!entry) continue;
+    const { goal, quest } = entry;
+    if (!goalMap.has(goal.id)) goalMap.set(goal.id, { name: goal.name, quests: [] });
+    goalMap.get(goal.id).quests.push(quest.text);
   }
 
   return (
     <div
       data-testid="selected-tasks-receipt"
-      style={{
-        marginTop: 10,
-        padding: '8px 10px',
-        borderTop: '1px dashed rgba(0,229,255,0.1)',
-      }}
+      style={{ marginTop: 10, padding: '8px 10px', borderTop: '1px dashed rgba(0,229,255,0.1)' }}
     >
       <p style={{
-        fontSize: 9,
-        color: 'rgba(255,255,255,0.18)',
-        fontFamily: 'Space Mono, monospace',
-        letterSpacing: '0.18em',
-        marginBottom: 6,
+        fontSize: 9, color: 'rgba(255,255,255,0.18)',
+        fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em', marginBottom: 8,
       }}>
         SELECTED — {selectedQuestIds.length}
       </p>
-      <div style={{ overflowY: 'auto', maxHeight: 130 }}>
-        {goalNames.map((name, i) => (
-          <p
-            key={i}
-            style={{
-              fontSize: 11,
-              color: 'rgba(255,255,255,0.35)',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              marginBottom: 4,
-              lineHeight: 1.4,
-              paddingLeft: 4,
-              borderLeft: '2px solid rgba(57,255,20,0.25)',
-            }}
-          >
-            {name}
-          </p>
+      <div style={{ overflowY: 'auto', maxHeight: 160 }}>
+        {[...goalMap.entries()].map(([goalId, { name, quests }]) => (
+          <div key={goalId} style={{ marginBottom: 8 }}>
+            {/* Goal name as dim label */}
+            <p style={{
+              fontSize: 9, color: 'rgba(255,255,255,0.22)',
+              fontFamily: 'Space Mono, monospace', letterSpacing: '0.08em',
+              marginBottom: 3, textTransform: 'uppercase',
+            }}>
+              {name}
+            </p>
+            {/* Each specific activity */}
+            {quests.map((text, i) => (
+              <p key={i} style={{
+                fontSize: 11, color: 'rgba(255,255,255,0.55)',
+                fontFamily: 'system-ui, sans-serif', marginBottom: 3,
+                lineHeight: 1.4, paddingLeft: 6,
+                borderLeft: '2px solid rgba(57,255,20,0.3)',
+              }}>
+                {text}
+              </p>
+            ))}
+          </div>
         ))}
       </div>
     </div>
@@ -106,61 +106,77 @@ export default function PlanningMode() {
     >
       {/* Top Bar */}
       <div
-        className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+        className="flex items-center justify-between px-4 py-3 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(0,229,255,0.12)', background: 'rgba(0,229,255,0.018)' }}
       >
-        <div className="flex items-center gap-3">
-          <Building2 size={17} color="#39FF14" />
+        <div className="flex items-center gap-2">
+          <Building2 size={16} color="#39FF14" />
           <h1
             className="font-orbitron"
-            style={{ fontSize: 14, color: '#39FF14', letterSpacing: '0.2em', margin: 0 }}
+            style={{ fontSize: 13, color: '#39FF14', letterSpacing: '0.18em', margin: 0 }}
           >
             SUPERHERO HQ
           </h1>
           <span
             className="hidden sm:inline font-orbitron"
-            style={{ fontSize: 11, color: 'rgba(0,229,255,0.55)', letterSpacing: '0.15em' }}
+            style={{ fontSize: 10, color: 'rgba(0,229,255,0.55)', letterSpacing: '0.12em' }}
           >
-            — PLANNING MODE
+            — PLANNING
           </span>
         </div>
-
-        {/* Right: info + music toggle */}
-        <div className="flex items-center gap-3">
-          <p
-            style={{ fontSize: 11, color: '#8B8B8D', fontFamily: 'Space Mono, monospace', margin: 0 }}
-          >
-            <span className="hidden sm:inline">BUILD YOUR WEEK · </span>20 EP MAX
+        <div className="flex items-center gap-2">
+          <p style={{ fontSize: 11, color: '#8B8B8D', fontFamily: 'Space Mono, monospace', margin: 0 }}>
+            <span className="hidden sm:inline">BUILD YOUR WEEK · </span>20 EP
           </p>
           <MusicBtn />
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      {/* Main Content — desktop: side-by-side | mobile: stacked */}
+      <div className="flex-1 flex flex-col sm:flex-row overflow-hidden min-h-0">
 
-        {/* Left: Building + Selected Tasks Receipt */}
+        {/* Building panel — compact on mobile, side column on desktop */}
         <div
           data-testid="building-panel"
           className="flex flex-col overflow-y-auto building-scroll flex-shrink-0"
           style={{
-            width: '36%',
-            maxWidth: 320,
-            minWidth: 180,
-            padding: '12px 10px 12px 12px',
+            /* Desktop: fixed side column */
+            width: '100%',
+            maxHeight: '38%',
+
+            /* Responsive overrides via style tag below */
+            padding: '10px 10px 10px 12px',
             background: 'rgba(0,229,255,0.012)',
-            borderRight: '1px solid rgba(0,229,255,0.055)',
+            borderBottom: '1px solid rgba(0,229,255,0.055)',
           }}
         >
           <Building />
           <SelectedTasksReceipt />
         </div>
 
-        {/* Right: Command Center */}
-        <div className="flex flex-col flex-1 min-w-0" style={{ background: '#050505' }}>
+        {/* Command Center — fills remaining space */}
+        <div
+          className="flex flex-col flex-1 min-w-0 min-h-0"
+          style={{ background: '#050505', overflow: 'hidden' }}
+        >
           <CommandCenter />
         </div>
       </div>
+
+      {/* Responsive layout override for sm+ screens */}
+      <style>{`
+        @media (min-width: 640px) {
+          [data-testid="building-panel"] {
+            max-height: 100% !important;
+            height: 100% !important;
+            width: 34% !important;
+            max-width: 300px !important;
+            min-width: 170px !important;
+            border-bottom: none !important;
+            border-right: 1px solid rgba(0,229,255,0.055) !important;
+          }
+        }
+      `}</style>
     </motion.div>
   );
 }

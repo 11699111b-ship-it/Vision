@@ -65,16 +65,16 @@ function SectionHeader({ label, done, total }) {
 }
 
 // ── Task card ─────────────────────────────────────────────────────────────────
-// Parent Goal = primary bold text (top); Quest action = muted secondary (below)
+// Goal name (bold, top) as context header; specific quest action (muted) below
 function TaskCard({ quest, goal, isCompleted, onToggle }) {
   return (
     <motion.div
       data-testid={`task-card-${quest.id}`}
-      className="flex items-center gap-4 p-4 mb-2 cursor-pointer"
+      className="flex items-center gap-3 p-3 mb-2 cursor-pointer"
       style={{
         background: '#161616',
-        borderRadius: 14,
-        border: `1px solid ${isCompleted ? 'rgba(57,255,20,0.45)' : 'rgba(255,255,255,0.06)'}`,
+        borderRadius: 12,
+        border: `1px solid ${isCompleted ? 'rgba(57,255,20,0.4)' : 'rgba(255,255,255,0.06)'}`,
         transition: 'border-color 0.2s',
       }}
       whileTap={{ scale: 0.98 }}
@@ -82,36 +82,34 @@ function TaskCard({ quest, goal, isCompleted, onToggle }) {
     >
       {/* Status dot */}
       <div style={{
-        width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+        width: 7, height: 7, borderRadius: '50%', flexShrink: 0, marginTop: 2,
         background: isCompleted ? '#39FF14' : 'rgba(255,255,255,0.14)',
         boxShadow: isCompleted ? '0 0 5px rgba(57,255,20,0.5)' : 'none',
         transition: 'all 0.2s',
       }} />
 
-      {/* Text — Parent Goal (primary) + Quest action (secondary) */}
+      {/* Text — Goal name (context label) + specific activity (what to DO) */}
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Goal name — small dim label for context */}
         <p style={{
-          fontSize: 15,
-          fontWeight: 700,
-          color: isCompleted ? 'rgba(255,255,255,0.35)' : '#ffffff',
-          textDecorationLine: isCompleted ? 'line-through' : 'none',
-          textDecorationColor: 'rgba(255,255,255,0.25)',
-          margin: 0,
-          lineHeight: 1.3,
-          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+          fontSize: 10, fontWeight: 600,
+          color: isCompleted ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.38)',
+          margin: 0, lineHeight: 1.2,
+          fontFamily: 'Space Mono, monospace',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
         }}>
           {goal.name}
         </p>
+        {/* Quest action — THIS is the activity to do */}
         <p style={{
-          fontSize: 12,
-          color: 'rgba(255,255,255,0.38)',
-          margin: '4px 0 0',
-          fontFamily: 'system-ui, sans-serif',
-          lineHeight: 1.45,
-          overflow: 'hidden',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
+          fontSize: 14, fontWeight: 600,
+          color: isCompleted ? 'rgba(255,255,255,0.32)' : '#ffffff',
+          textDecorationLine: isCompleted ? 'line-through' : 'none',
+          textDecorationColor: 'rgba(255,255,255,0.22)',
+          margin: '3px 0 0',
+          lineHeight: 1.35,
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
         }}>
           {quest.text}
         </p>
@@ -120,7 +118,7 @@ function TaskCard({ quest, goal, isCompleted, onToggle }) {
       {/* Toggle circle */}
       <motion.div
         style={{
-          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+          width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
           border: `2px solid ${isCompleted ? '#39FF14' : 'rgba(255,255,255,0.18)'}`,
           background: isCompleted ? '#39FF14' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -129,7 +127,7 @@ function TaskCard({ quest, goal, isCompleted, onToggle }) {
         animate={isCompleted ? { scale: [1, 1.15, 1] } : {}}
         transition={{ duration: 0.25 }}
       >
-        {isCompleted && <Check size={14} color="#000" strokeWidth={3.5} />}
+        {isCompleted && <Check size={13} color="#000" strokeWidth={3.5} />}
       </motion.div>
     </motion.div>
   );
@@ -232,21 +230,21 @@ export default function TrackingMode() {
       transition={{ duration: 0.25 }}
     >
       {/* Nav */}
-      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <motion.button
           data-testid="hq-visit-btn"
           onClick={() => dispatch({ type: 'SET_VIEW', view: 'hq-visit' })}
           className="flex items-center gap-2"
-          style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+          style={{ background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
           whileHover={{ borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.04)' }}
           whileTap={{ scale: 0.95 }}
         >
-          <Building2 size={14} color="#8B8B8D" />
-          <span className="font-orbitron" style={{ fontSize: 9, color: '#8B8B8D', letterSpacing: '0.15em' }}>VISIT HQ</span>
+          <Building2 size={13} color="#8B8B8D" />
+          <span className="font-orbitron hidden sm:inline" style={{ fontSize: 9, color: '#8B8B8D', letterSpacing: '0.15em' }}>VISIT HQ</span>
         </motion.button>
 
-        <h1 className="font-orbitron" style={{ fontSize: 11, color: '#39FF14', letterSpacing: '0.2em' }}>
+        <h1 className="font-orbitron" style={{ fontSize: 11, color: '#39FF14', letterSpacing: '0.18em' }}>
           ACTIVE PROTOCOL
         </h1>
 
@@ -254,22 +252,24 @@ export default function TrackingMode() {
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-y-auto px-4 py-4" style={{ minHeight: 0 }}>
 
         {/* Progress ring + streak */}
         <div className="flex flex-col items-center mb-2 pt-2">
-          <ProgressRing percentage={dailyProgress} size={164} strokeWidth={9} />
+          <ProgressRing
+            percentage={dailyProgress}
+            size={typeof window !== 'undefined' && window.innerWidth < 480 ? 130 : 164}
+            strokeWidth={9}
+          />
 
           <p style={{
-            fontSize: 52,
-            fontWeight: 900,
-            color: '#ffffff',
-            lineHeight: 1,
-            margin: '14px 0 8px',
+            fontSize: typeof window !== 'undefined' && window.innerWidth < 480 ? 40 : 52,
+            fontWeight: 900, color: '#ffffff', lineHeight: 1,
+            margin: '12px 0 8px',
             fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
             letterSpacing: '-0.02em',
           }}>
-            {streak} <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: '0.02em' }}>DAYS</span>
+            {streak} <span style={{ fontSize: typeof window !== 'undefined' && window.innerWidth < 480 ? 22 : 28, fontWeight: 700 }}>DAYS</span>
           </p>
 
           {/* Buffer pill */}
