@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { MusicProvider, useMusicContext } from './context/MusicContext';
+import { usePWA } from './hooks/usePWA';
 import WelcomeScreen from './components/WelcomeScreen';
 import PlanningMode from './components/PlanningMode';
 import TrackingMode from './components/TrackingMode';
@@ -12,6 +13,7 @@ import './App.css';
 function AppContent() {
   const { appView } = useAppContext();
   const { syncMusic } = useMusicContext();
+  usePWA();
 
   // Sync music state when entering the app after welcome screen
   useEffect(() => {

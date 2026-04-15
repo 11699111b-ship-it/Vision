@@ -35,8 +35,8 @@ function MusicBtn() {
   );
 }
 
-// ── Minimalist Selected Tasks Receipt (below building) ─────────────────────────
-// Shows the SPECIFIC ACTIVITY (quest.text) grouped under each goal heading
+// ── Minimalist Selected Tasks Receipt (desktop only — below building) ──────────
+// Shows each selected ACTIVITY grouped under its parent Goal label
 function SelectedTasksReceipt() {
   const { activeSprint, questLookup } = useAppContext();
   const { selectedQuestIds } = activeSprint;
@@ -56,32 +56,42 @@ function SelectedTasksReceipt() {
   return (
     <div
       data-testid="selected-tasks-receipt"
-      style={{ marginTop: 10, padding: '8px 10px', borderTop: '1px dashed rgba(0,229,255,0.1)' }}
+      style={{
+        borderTop: '1px solid rgba(0,229,255,0.3)',        /* border-t border-[#00E5FF]/30 */
+        paddingTop: 16,                                    /* pt-4 */
+        marginTop: 16,                                     /* mt-4 */
+      }}
     >
       <p style={{
-        fontSize: 9, color: 'rgba(255,255,255,0.18)',
-        fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em', marginBottom: 8,
+        fontSize: 9, color: 'rgba(255,255,255,0.2)',
+        fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em', marginBottom: 10,
       }}>
         SELECTED — {selectedQuestIds.length}
       </p>
-      <div style={{ overflowY: 'auto', maxHeight: 160 }}>
+      <div style={{ overflowY: 'auto', maxHeight: 180 }}>
         {[...goalMap.entries()].map(([goalId, { name, quests }]) => (
-          <div key={goalId} style={{ marginBottom: 8 }}>
-            {/* Goal name as dim label */}
+          <div key={goalId} style={{ marginBottom: 10 }}>
+            {/* Parent Goal — text-[10px] uppercase text-gray-500 */}
             <p style={{
-              fontSize: 9, color: 'rgba(255,255,255,0.22)',
-              fontFamily: 'Space Mono, monospace', letterSpacing: '0.08em',
-              marginBottom: 3, textTransform: 'uppercase',
+              fontSize: 10, color: '#6B7280',                /* text-gray-500 */
+              fontFamily: 'Space Mono, monospace',
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+              marginBottom: 3,
             }}>
               {name}
             </p>
-            {/* Each specific activity */}
+            {/* Quest activities — text-xs text-gray-300 line-clamp-1 */}
             {quests.map((text, i) => (
               <p key={i} style={{
-                fontSize: 11, color: 'rgba(255,255,255,0.55)',
-                fontFamily: 'system-ui, sans-serif', marginBottom: 3,
-                lineHeight: 1.4, paddingLeft: 6,
+                fontSize: 12,                               /* text-xs */
+                color: '#D1D5DB',                           /* text-gray-300 */
+                fontFamily: 'system-ui, sans-serif',
+                marginBottom: 2, lineHeight: 1.4,
+                paddingLeft: 6,
                 borderLeft: '2px solid rgba(57,255,20,0.3)',
+                overflow: 'hidden',                         /* line-clamp-1 */
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
               }}>
                 {text}
               </p>
@@ -135,26 +145,24 @@ export default function PlanningMode() {
       {/* Main Content — desktop: side-by-side | mobile: stacked */}
       <div className="flex-1 flex flex-col sm:flex-row overflow-hidden min-h-0">
 
-        {/* Building panel — compact on mobile, side column on desktop */}
+        {/* Building panel — HIDDEN on mobile, side column on desktop (sm+) */}
         <div
           data-testid="building-panel"
-          className="flex flex-col overflow-y-auto building-scroll flex-shrink-0"
+          className="hidden sm:flex flex-col overflow-y-auto building-scroll flex-shrink-0"
           style={{
-            /* Desktop: fixed side column */
-            width: '100%',
-            maxHeight: '38%',
-
-            /* Responsive overrides via style tag below */
+            width: '34%',
+            maxWidth: 300,
+            minWidth: 170,
             padding: '10px 10px 10px 12px',
             background: 'rgba(0,229,255,0.012)',
-            borderBottom: '1px solid rgba(0,229,255,0.055)',
+            borderRight: '1px solid rgba(0,229,255,0.055)',
           }}
         >
           <Building />
           <SelectedTasksReceipt />
         </div>
 
-        {/* Command Center — fills remaining space */}
+        {/* Command Center — full width on mobile, fills remaining on desktop */}
         <div
           className="flex flex-col flex-1 min-w-0 min-h-0"
           style={{ background: '#050505', overflow: 'hidden' }}
@@ -162,21 +170,6 @@ export default function PlanningMode() {
           <CommandCenter />
         </div>
       </div>
-
-      {/* Responsive layout override for sm+ screens */}
-      <style>{`
-        @media (min-width: 640px) {
-          [data-testid="building-panel"] {
-            max-height: 100% !important;
-            height: 100% !important;
-            width: 34% !important;
-            max-width: 300px !important;
-            min-width: 170px !important;
-            border-bottom: none !important;
-            border-right: 1px solid rgba(0,229,255,0.055) !important;
-          }
-        }
-      `}</style>
     </motion.div>
   );
 }
