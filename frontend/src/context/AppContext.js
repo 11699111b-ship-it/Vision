@@ -208,6 +208,19 @@ function reducer(state, action) {
     case 'CLEAR_ERROR':
       return { ...state, launchError: null };
 
+    case 'RESET_SPRINT':
+      return {
+        ...state,
+        launchError: null,
+        activeSprint: {
+          selectedQuestIds: [],
+          completedTodayIds: [],
+          completedWeeklyIds: [],
+          sprintStartDate: null,
+          yesterdayProgress: null,
+        },
+      };
+
     case 'LOAD_LOADOUT': {
       const { questIds } = action;
       if (!questIds || questIds.length === 0) {

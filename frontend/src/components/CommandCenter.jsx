@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronRight, Plus, X, Rocket, AlertTriangle, Check, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, X, Rocket, AlertTriangle, Check, Zap, RotateCcw } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import { FOUNDER_GRIND, RECOVERY_WEEK } from '../data/loadouts';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
-// ── Quest card (minimalist, full-row tap target) ──────────────────────────────
+// ── Quest card ─────────────────────────────────────────────────────────────────
+// Parent Goal = primary bold text (top); Quest action = muted secondary (below)
 function QuestCard({ quest, goal, isSelected, isLocked, onToggle }) {
   const freqColor = FREQ_COLORS[quest.frequency] || '#8B8B8D';
   return (
@@ -26,29 +27,30 @@ function QuestCard({ quest, goal, isSelected, isLocked, onToggle }) {
       onClick={() => { if (!isLocked) { boop(); onToggle(quest.id); } }}
       whileTap={!isLocked ? { scale: 0.99 } : {}}
     >
-      {/* Text */}
+      {/* Text — Parent Goal (primary) + Quest action (secondary) */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
           fontSize: 13,
-          fontWeight: 600,
-          color: isSelected ? '#ffffff' : '#a8a8a8',
+          fontWeight: 700,
+          color: isSelected ? '#ffffff' : '#c8c8c8',
           margin: 0,
           lineHeight: 1.35,
           fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
         }}>
-          {quest.text}
+          {goal.name}
         </p>
         <p style={{
           fontSize: 11,
-          color: 'rgba(255,255,255,0.26)',
-          margin: '2px 0 0',
-          fontFamily: 'Space Mono, monospace',
-          letterSpacing: '0.06em',
+          color: 'rgba(255,255,255,0.38)',
+          margin: '3px 0 0',
+          fontFamily: 'system-ui, sans-serif',
+          lineHeight: 1.4,
           overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
         }}>
-          {goal.name}
+          {quest.text}
         </p>
       </div>
 
@@ -370,6 +372,7 @@ export default function CommandCenter() {
   const { blueprint, totalEP, MAX_EP, activeSprint, launchError, dispatch } = useAppContext();
   const canLaunch = activeSprint.selectedQuestIds.length > 0 && totalEP <= MAX_EP;
   const epPct = Math.min((totalEP / MAX_EP) * 100, 100);
+  const hasSelection = activeSprint.selectedQuestIds.length > 0;
 
   return (
     <div data-testid="command-center" className="flex flex-col h-full">
@@ -377,7 +380,7 @@ export default function CommandCenter() {
       {/* Smart Loadouts */}
       <LoadoutsPanel />
 
-      {/* EP budget strip */}
+      {/* EP budget strip + Reset button */}
       <div
         data-testid="ep-budget-display"
         className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0"
@@ -397,8 +400,34 @@ export default function CommandCenter() {
           {totalEP}<span style={{ color: '#333', fontSize: 12 }}>/{MAX_EP}</span>
         </span>
         <span style={{ fontSize: 11, color: '#444', fontFamily: 'Space Mono, monospace', flexShrink: 0 }}>
-          {activeSprint.selectedQuestIds.length} selected
+          {activeSprint.selectedQuestIds.length}
         </span>
+
+        {/* Reset Sprint button */}
+        <motion.button
+          data-testid="reset-sprint-btn"
+          onClick={() => { if (hasSelection) { boop(); dispatch({ type: 'RESET_SPRINT' }); } }}
+          title="Reset all selections"
+          style={{
+            background: 'transparent',
+            border: `1px solid ${hasSelection ? 'rgba(255,59,48,0.3)' : 'rgba(255,255,255,0.06)'}`,
+            borderRadius: 6,
+            padding: '3px 8px',
+            cursor: hasSelection ? 'pointer' : 'not-allowed',
+            opacity: hasSelection ? 1 : 0.35,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            flexShrink: 0,
+          }}
+          whileHover={hasSelection ? { background: 'rgba(255,59,48,0.1)', borderColor: 'rgba(255,59,48,0.6)' } : {}}
+          whileTap={hasSelection ? { scale: 0.94 } : {}}
+        >
+          <RotateCcw size={10} color={hasSelection ? '#FF3B30' : '#333'} />
+          <span style={{ fontSize: 10, color: hasSelection ? '#FF3B30' : '#333', fontFamily: 'Space Mono, monospace' }}>
+            RESET
+          </span>
+        </motion.button>
       </div>
 
       {/* Blueprint — all floors collapsed by default */}

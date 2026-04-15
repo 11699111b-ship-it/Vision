@@ -1,10 +1,39 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Check, Flame, Shield, Trophy } from 'lucide-react';
+import { Building2, Check, Flame, Shield, Trophy, Volume2, VolumeX } from 'lucide-react';
 import Confetti from 'react-confetti';
 import { useAppContext } from '../context/AppContext';
+import { useMusicContext } from '../context/MusicContext';
 import ProgressRing from './ProgressRing';
 import { boop, playSuccess, playTriumphant, playLowPitch } from '../utils/audioEngine';
+
+// ── Music toggle button ────────────────────────────────────────────────────────
+function MusicBtn() {
+  const { musicOn, toggleMusic } = useMusicContext();
+  return (
+    <motion.button
+      data-testid="music-toggle-btn"
+      onClick={toggleMusic}
+      title={musicOn ? 'Pause music' : 'Play music'}
+      style={{
+        background: 'none',
+        border: `1px solid ${musicOn ? 'rgba(57,255,20,0.3)' : 'rgba(255,255,255,0.1)'}`,
+        borderRadius: '50%',
+        width: 30,
+        height: 30,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }}
+      whileTap={{ scale: 0.88 }}
+      whileHover={{ borderColor: musicOn ? 'rgba(57,255,20,0.6)' : 'rgba(255,255,255,0.25)' }}
+    >
+      {musicOn ? <Volume2 size={13} color="#39FF14" /> : <VolumeX size={13} color="#555" />}
+    </motion.button>
+  );
+}
 
 // ── Section divider ──────────────────────────────────────────────────────────
 function SectionHeader({ label, done, total }) {
@@ -36,6 +65,7 @@ function SectionHeader({ label, done, total }) {
 }
 
 // ── Task card ─────────────────────────────────────────────────────────────────
+// Parent Goal = primary bold text (top); Quest action = muted secondary (below)
 function TaskCard({ quest, goal, isCompleted, onToggle }) {
   return (
     <motion.div
@@ -58,32 +88,32 @@ function TaskCard({ quest, goal, isCompleted, onToggle }) {
         transition: 'all 0.2s',
       }} />
 
-      {/* Text */}
+      {/* Text — Parent Goal (primary) + Quest action (secondary) */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: 700,
-          color: isCompleted ? 'rgba(255,255,255,0.38)' : '#ffffff',
+          color: isCompleted ? 'rgba(255,255,255,0.35)' : '#ffffff',
           textDecorationLine: isCompleted ? 'line-through' : 'none',
           textDecorationColor: 'rgba(255,255,255,0.25)',
           margin: 0,
           lineHeight: 1.3,
           fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
         }}>
-          {quest.text}
+          {goal.name}
         </p>
         <p style={{
-          fontSize: 11,
-          color: 'rgba(255,255,255,0.26)',
-          margin: '3px 0 0',
-          letterSpacing: '0.12em',
-          fontFamily: 'Space Mono, monospace',
-          textTransform: 'uppercase',
+          fontSize: 12,
+          color: 'rgba(255,255,255,0.38)',
+          margin: '4px 0 0',
+          fontFamily: 'system-ui, sans-serif',
+          lineHeight: 1.45,
           overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
         }}>
-          {goal.name}
+          {quest.text}
         </p>
       </div>
 
@@ -220,7 +250,7 @@ export default function TrackingMode() {
           ACTIVE PROTOCOL
         </h1>
 
-        <div style={{ width: 80 }} /> {/* spacer to keep title centered */}
+        <MusicBtn />
       </div>
 
       {/* Scrollable body */}
