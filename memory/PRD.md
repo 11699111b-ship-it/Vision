@@ -102,8 +102,11 @@ src/
 - [x] New professional floor/room naming (Apr 2026)
 - [x] Parent Goal as primary text on quest cards (Apr 2026)
 - [x] Reset Sprint button (Apr 2026)
-- [x] Selected Tasks Receipt (Apr 2026)
+- [x] Selected Tasks Receipt — shows specific activities grouped under dim goal labels (Apr 2026)
+- [x] Goal grouping in CommandCenter — each goal as bold header row + EP badge, quests listed below indented (Apr 2026)
+- [x] TrackingMode task cards — goal.name as dim context label, quest.text as main bold activity (Apr 2026)
 - [x] Music toggle in nav bar (Apr 2026)
+- [x] Mobile responsive layout — stacked flex-col on mobile, side-by-side on sm+ (Apr 2026)
 
 ### P1 (Next Sprint)
 - [ ] HQ Visit Mode testing/polish
