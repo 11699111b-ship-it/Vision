@@ -107,6 +107,10 @@ src/
 - [x] TrackingMode task cards — goal.name as dim context label, quest.text as main bold activity (Apr 2026)
 - [x] Music toggle in nav bar (Apr 2026)
 - [x] Mobile responsive layout — stacked flex-col on mobile, side-by-side on sm+ (Apr 2026)
+- [x] Command Center UI redesign — goal groups mb-8, uppercase header + border-b + green EP pill, py-3.5 px-4 quest rows, text-gray-300 readability (Apr 2026)
+- [x] Selected Tasks Receipt — border-t cyan, goal text-[10px] uppercase gray-500, activity text-xs gray-300 line-clamp-1 (Apr 2026)
+- [x] Mobile: building panel hidden (hidden sm:flex), MobileReceiptBar chip row in CommandCenter (Apr 2026)
+- [x] PWA: manifest.json, sw.js (offline + local 3AM notification), iOS meta tags, title = Superhero HQ (Apr 2026)
 
 ### P1 (Next Sprint)
 - [ ] HQ Visit Mode testing/polish
