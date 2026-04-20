@@ -1,7 +1,10 @@
-import React, { createContext, useContext, useReducer, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import INITIAL_BLUEPRINT, { EP_COSTS } from '../data/blueprint';
+import { getISTDate, getISTHour, isSprintExpired } from '../utils/istUtils';
 
 const STORAGE_KEY = 'superhero_hq_v2';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzyZTaQOLvFsmD1DCZbKgYtbzHOXi4iA8gMFEI4yV9N6Vr5pTlPOAwR_NM-L_w_nTtF/exec';
+
 export const MAX_EP = 20;
 export const UPKEEP_MIN_EP = 5;
 
@@ -49,7 +52,7 @@ function mergeBlueprint(initial, saved) {
         if (sr) room.customGoals = sr.customGoals || [];
       });
     });
-  } catch { /* ignore merge errors */ }
+  } catch { /* ignore */ }
   return merged;
 }
 
@@ -71,6 +74,7 @@ const initialState = {
   launchError: null,
   submissionResult: null,
   lastSprintQuestIds: [],
+  autoSubmittedMessage: null,
 };
 
 function reducer(state, action) {
@@ -121,6 +125,7 @@ function reducer(state, action) {
         const done = activeSprint.completedTodayIds.includes(questId);
         return { ...state, activeSprint: { ...activeSprint, completedTodayIds: done ? activeSprint.completedTodayIds.filter(id => id !== questId) : [...activeSprint.completedTodayIds, questId] } };
       } else {
+        // Weekly/Monthly/Quarterly persist across days — only cleared on sprint submit
         const done = activeSprint.completedWeeklyIds.includes(questId);
         return { ...state, activeSprint: { ...activeSprint, completedWeeklyIds: done ? activeSprint.completedWeeklyIds.filter(id => id !== questId) : [...activeSprint.completedWeeklyIds, questId] } };
       }
@@ -131,7 +136,12 @@ function reducer(state, action) {
       if (activeSprint.selectedQuestIds.length === 0) {
         return { ...state, launchError: 'Select at least one quest to launch the mission!' };
       }
-      return { ...state, appView: 'tracking', launchError: null, activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() } };
+      return {
+        ...state,
+        appView: 'tracking',
+        launchError: null,
+        activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() },
+      };
     }
 
     case 'SUBMIT_MISSION': {
@@ -149,11 +159,42 @@ function reducer(state, action) {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         submissionResult: { percentage, isPerfect },
-        // Save this sprint's quests so "Repeat Last Week" works
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
       };
     }
+
+    // ── Auto-submit (IST Sunday midnight deadline reached) ───────────────────
+    case 'AUTO_SUBMIT_SPRINT': {
+      const { activeSprint } = state;
+      const { selectedQuestIds, completedTodayIds, completedWeeklyIds } = activeSprint;
+      const total = selectedQuestIds.length;
+      if (total === 0) {
+        return {
+          ...state,
+          appView: 'planning',
+          autoSubmittedMessage: 'Boss Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
+          activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
+        };
+      }
+      const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
+      const nonDailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency !== 'Daily');
+      const completedD = dailyIds.filter(id => completedTodayIds.includes(id)).length;
+      const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
+      const percentage = Math.round(((completedD + completedW) / total) * 100);
+      const isPerfect = percentage === 100;
+      return {
+        ...state,
+        xp: isPerfect ? state.xp + 1 : state.xp,
+        autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
+        lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
+        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
+        appView: 'planning',
+      };
+    }
+
+    case 'CLEAR_AUTO_SUBMIT':
+      return { ...state, autoSubmittedMessage: null };
 
     case 'CLEAR_SUBMISSION':
       return { ...state, appView: 'planning', submissionResult: null };
@@ -166,7 +207,6 @@ function reducer(state, action) {
       const room = floor.rooms.find(r => r.id === roomId);
       if (!room) return state;
       room.customGoals = [...(room.customGoals || []), goal];
-      // Auto-select the new quest so its floor lights up immediately in the building
       const newQuestId = goal.quests[0]?.id;
       if (newQuestId) {
         const newLookup = buildQuestLookup(nb);
@@ -184,23 +224,34 @@ function reducer(state, action) {
       return { ...state, blueprint: nb };
     }
 
+    // ── IST 3AM Daily Reset — ONLY resets Daily tasks (Weekly+ persist) ───────
     case 'DAILY_RESET': {
       const { activeSprint, buffers, streak, lastBufferResetMonth } = state;
       const { completedTodayIds, selectedQuestIds } = activeSprint;
+
+      // Only Daily-frequency tasks count for daily progress score
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
       const yp = dailyIds.length > 0
         ? Math.round((completedTodayIds.filter(id => dailyIds.includes(id)).length / dailyIds.length) * 100)
         : 100;
+
       let ns = streak, nb = buffers;
       if (yp >= 100) { ns = streak + 1; }
       else { if (nb > 0) { nb -= 1; } else { ns = 0; } }
-      const now = new Date();
-      const cm = now.getMonth() + 1;
-      if (lastBufferResetMonth !== cm && now.getDate() === 1) nb = 2;
+
+      // IST-based date + monthly buffer reset on 1st of month
+      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const istDateStr = istNow.toLocaleDateString('en-CA');
+      const cm = istNow.getMonth() + 1;
+      if (lastBufferResetMonth !== cm && istNow.getDate() === 1) nb = 2;
+
       return {
-        ...state, streak: ns, buffers: Math.min(2, nb),
-        lastResetDate: now.toISOString().split('T')[0],
+        ...state,
+        streak: ns,
+        buffers: Math.min(2, nb),
+        lastResetDate: istDateStr,
         lastBufferResetMonth: cm,
+        // completedTodayIds cleared (Daily only) — completedWeeklyIds preserved
         activeSprint: { ...activeSprint, completedTodayIds: [], yesterdayProgress: yp },
       };
     }
@@ -226,20 +277,15 @@ function reducer(state, action) {
       if (!questIds || questIds.length === 0) {
         return { ...state, activeSprint: { ...state.activeSprint, selectedQuestIds: [] } };
       }
-      // Only include quests that exist and are not locked
       const validIds = questIds.filter(id => {
         const entry = lookup[id];
         return entry && !entry.room.locked && entry.goal.tag !== 'Locked';
       });
-      // Respect EP budget — take as many as fit
       let runningEP = 0;
       const fittingIds = [];
       for (const id of validIds) {
         const ep = lookup[id]?.goal.epCost || 0;
-        if (runningEP + ep <= MAX_EP) {
-          fittingIds.push(id);
-          runningEP += ep;
-        }
+        if (runningEP + ep <= MAX_EP) { fittingIds.push(id); runningEP += ep; }
       }
       return {
         ...state,
@@ -255,34 +301,73 @@ function reducer(state, action) {
 
 const AppContext = createContext(null);
 
+// ── Async GAS save (debounced, fire-and-forget) ──────────────────────────────
+function saveToGAS(data) {
+  fetch(GAS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(data),
+  }).catch(() => {});
+}
+
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [isLoading, setIsLoading] = useState(true);
+  const saveTimerRef = useRef(null);
+  const initialLoadDone = useRef(false);
 
+  // ── 1. Load state from GAS on mount (with localStorage fallback) ────────────
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const hasEntered = localStorage.getItem('hq_entered');
-      // Only restore state (and skip welcome) if user has previously entered HQ
-      if (raw && hasEntered) {
-        dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
+    const load = async () => {
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 8000); // 8s timeout
+        const res = await fetch(GAS_URL, { signal: controller.signal });
+        clearTimeout(tid);
+        const data = await res.json();
+        if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
+          dispatch({ type: 'LOAD_STATE', payload: data });
+        } else {
+          throw new Error('empty');
+        }
+      } catch {
+        // Fallback to localStorage
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const hasEntered = localStorage.getItem('hq_entered');
+          if (raw && hasEntered) dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
+        } catch { /* ignore */ }
+      } finally {
+        setIsLoading(false);
       }
-      // If no hasEntered flag → stay on welcome screen
-    } catch { /* ignore */ }
+    };
+    load();
   }, []);
 
+  // ── 2. Save state to GAS (debounced 3s) + localStorage (immediate) ─────────
   useEffect(() => {
-    try {
-      const { appView, launchError, submissionResult, ...toSave } = state;
-      toSave.appView = appView === 'welcome' ? 'planning' : appView;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-    } catch { /* ignore */ }
-  }, [state]);
+    if (isLoading) return;
+    if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
+    const { appView, launchError, submissionResult, autoSubmittedMessage, ...toSave } = state;
+    toSave.appView = appView === 'welcome' ? 'planning' : appView;
+
+    // localStorage — immediate, offline resilient
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave)); } catch { /* ignore */ }
+
+    // GAS — debounced 3 seconds
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => saveToGAS(toSave), 3000);
+  }, [state, isLoading]);
+
+  // ── 3. IST 3AM Daily Reset (checks every 60s, only resets Daily tasks) ──────
   useEffect(() => {
     const check = () => {
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      if (now.getHours() >= 3 && state.lastResetDate !== today && state.activeSprint.sprintStartDate) {
+      if (!state.activeSprint.sprintStartDate) return;
+      const istDate = getISTDate();
+      const istHour = getISTHour();
+      if (istHour >= 3 && state.lastResetDate !== istDate) {
         dispatch({ type: 'DAILY_RESET' });
       }
     };
@@ -290,6 +375,18 @@ export function AppProvider({ children }) {
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
   }, [state.lastResetDate, state.activeSprint.sprintStartDate]);
+
+  // ── 4. IST Sunday 11:59 PM Auto-Submit (mount + every 60s interval) ─────────
+  useEffect(() => {
+    const check = () => {
+      if (state.activeSprint.sprintStartDate && isSprintExpired(state.activeSprint.sprintStartDate)) {
+        dispatch({ type: 'AUTO_SUBMIT_SPRINT' });
+      }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [state.activeSprint.sprintStartDate]);
 
   const questLookup = useMemo(() => buildQuestLookup(state.blueprint), [state.blueprint]);
   const totalEP = useMemo(() => calcTotalEP(questLookup, state.activeSprint.selectedQuestIds), [questLookup, state.activeSprint.selectedQuestIds]);
@@ -307,10 +404,24 @@ export function AppProvider({ children }) {
     return state.activeSprint.selectedQuestIds.some(id => questLookup[id]?.room.id === roomId);
   }, [state.activeSprint.selectedQuestIds, questLookup]);
 
-  const isLockdown = false; // Upkeep tax removed — all quests freely selectable
+  const isLockdown = false;
 
   return (
-    <AppContext.Provider value={{ ...state, dispatch, questLookup, totalEP, floor01EP, heroInfo, dailyProgress, isRoomActive, isLockdown, MAX_EP, UPKEEP_MIN_EP, EP_COSTS }}>
+    <AppContext.Provider value={{
+      ...state,
+      isLoading,
+      dispatch,
+      questLookup,
+      totalEP,
+      floor01EP,
+      heroInfo,
+      dailyProgress,
+      isRoomActive,
+      isLockdown,
+      MAX_EP,
+      UPKEEP_MIN_EP,
+      EP_COSTS,
+    }}>
       {children}
     </AppContext.Provider>
   );
