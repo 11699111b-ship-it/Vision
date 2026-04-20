@@ -35,6 +35,34 @@ function MusicBtn() {
   );
 }
 
+// ── Streak badge ──────────────────────────────────────────────────────────────
+function StreakBadge() {
+  const { streak } = useAppContext();
+  return (
+    <div
+      data-testid="streak-badge"
+      className="flex items-center gap-1"
+      style={{
+        padding: '4px 8px',
+        borderRadius: 14,
+        background: streak > 0 ? 'rgba(255,165,0,0.1)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${streak > 0 ? 'rgba(255,165,0,0.3)' : 'rgba(255,255,255,0.08)'}`,
+        flexShrink: 0,
+      }}
+    >
+      <Flame size={12} color={streak > 0 ? '#FFA500' : '#555'} />
+      <span style={{
+        fontSize: 11,
+        fontWeight: 700,
+        fontFamily: 'Space Mono, monospace',
+        color: streak > 0 ? '#FFA500' : '#555',
+      }}>
+        {streak}
+      </span>
+    </div>
+  );
+}
+
 // ── Section divider ──────────────────────────────────────────────────────────
 function SectionHeader({ label, done, total }) {
   return (
@@ -224,13 +252,13 @@ export default function TrackingMode() {
   return (
     <motion.div
       data-testid="tracking-mode-container"
-      className="w-full h-screen flex flex-col"
-      style={{ background: '#0a0a0a' }}
+      className="w-full flex flex-col"
+      style={{ background: '#0a0a0a', height: '100dvh' }}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
     >
       {/* Nav */}
-      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 safe-top"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <motion.button
           data-testid="hq-visit-btn"
@@ -248,7 +276,10 @@ export default function TrackingMode() {
           ACTIVE PROTOCOL
         </h1>
 
-        <MusicBtn />
+        <div className="flex items-center gap-2">
+          <StreakBadge />
+          <MusicBtn />
+        </div>
       </div>
 
       {/* Scrollable body */}

@@ -41,7 +41,7 @@ function AppContent() {
   }, [autoSubmittedMessage, dispatch]);
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#050505', overflow: 'hidden' }}>
+    <div style={{ width: '100vw', height: '100dvh', background: '#050505', overflow: 'hidden' }}>
       <AnimatePresence mode="wait">
         {appView === 'welcome' && <WelcomeScreen key="welcome" />}
         {appView === 'planning' && <PlanningMode key="planning" />}

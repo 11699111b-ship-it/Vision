@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Building2 } from 'lucide-react';
+import { Building2, Flame } from 'lucide-react';
 import { Volume2, VolumeX } from 'lucide-react';
 import Building from './Building';
 import CommandCenter from './CommandCenter';
@@ -32,6 +32,34 @@ function MusicBtn() {
     >
       {musicOn ? <Volume2 size={13} color="#39FF14" /> : <VolumeX size={13} color="#555" />}
     </motion.button>
+  );
+}
+
+// ── Streak badge ──────────────────────────────────────────────────────────────
+function StreakBadge() {
+  const { streak } = useAppContext();
+  return (
+    <div
+      data-testid="streak-badge"
+      className="flex items-center gap-1"
+      style={{
+        padding: '4px 8px',
+        borderRadius: 14,
+        background: streak > 0 ? 'rgba(255,165,0,0.1)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${streak > 0 ? 'rgba(255,165,0,0.3)' : 'rgba(255,255,255,0.08)'}`,
+        flexShrink: 0,
+      }}
+    >
+      <Flame size={12} color={streak > 0 ? '#FFA500' : '#555'} />
+      <span style={{
+        fontSize: 11,
+        fontWeight: 700,
+        fontFamily: 'Space Mono, monospace',
+        color: streak > 0 ? '#FFA500' : '#555',
+      }}>
+        {streak}
+      </span>
+    </div>
   );
 }
 
@@ -123,8 +151,8 @@ export default function PlanningMode() {
   return (
     <motion.div
       data-testid="planning-mode-container"
-      className="w-full h-screen flex flex-col"
-      style={{ background: '#050505' }}
+      className="w-full flex flex-col"
+      style={{ background: '#050505', height: '100dvh' }}
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
@@ -132,7 +160,7 @@ export default function PlanningMode() {
     >
       {/* Top Bar */}
       <div
-        className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+        className="flex items-center justify-between px-4 py-3 flex-shrink-0 safe-top"
         style={{ borderBottom: '1px solid rgba(0,229,255,0.12)', background: 'rgba(0,229,255,0.018)' }}
       >
         <div className="flex items-center gap-2">
@@ -155,6 +183,7 @@ export default function PlanningMode() {
           <p style={{ fontSize: 11, color: '#8B8B8D', fontFamily: 'Space Mono, monospace', margin: 0 }}>
             <span className="hidden sm:inline">· </span>20 EP
           </p>
+          <StreakBadge />
           <MusicBtn />
         </div>
       </div>

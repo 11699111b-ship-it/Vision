@@ -17,8 +17,8 @@ export default function WelcomeScreen() {
 
   return (
     <motion.div
-      className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden cyber-grid"
-      style={{ background: '#050505' }}
+      className="relative w-full flex flex-col items-center justify-center overflow-hidden cyber-grid"
+      style={{ background: '#050505', height: '100dvh' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1 }}

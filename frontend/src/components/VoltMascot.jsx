@@ -33,8 +33,8 @@ export default function VoltMascot() {
   return (
     <motion.div
       data-testid="volt-mascot"
-      className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2"
-      style={{ maxWidth: 260 }}
+      className="fixed right-5 z-50 flex flex-col items-end gap-2"
+      style={{ maxWidth: 260, bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' }}
     >
       {/* Chat bubble */}
       <AnimatePresence>

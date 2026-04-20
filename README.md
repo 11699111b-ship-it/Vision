@@ -1,1 +1,183 @@
-# Here are your Instructions
+# Superhero HQ
+
+A gamified weekly mission-planning PWA. Select goals from a 6-floor "building" blueprint, launch a weekly sprint, track daily/weekly completion, and log results to Google Sheets.
+
+## Tech Stack
+
+- **Frontend**: React 18 (CRA), Tailwind CSS, Framer Motion, Radix UI primitives
+- **State**: `useReducer` + React Context (`AppContext`). Persisted to localStorage (instant) + Google Apps Script (cross-device).
+- **Backend**: Google Apps Script (GAS) web app — stores state in a Google Sheet, logs weekly results. FastAPI backend exists but is unused by the app currently.
+- **Hosting**: GitHub Pages (static build). PWA with service worker + offline support.
+- **Audio**: Web Audio API — 8-bit chiptune background track + UI sound effects (boop, success, triumph).
+
+## Project Structure
+
+```
+frontend/
+  public/
+    index.html          # viewport-fit=cover, apple-mobile-web-app meta, PWA manifest link
+    manifest.json       # PWA manifest — standalone, portrait, dark theme
+    sw.js               # Service worker — caching + daily reset notification scheduling
+  src/
+    App.js              # Root — wraps AppProvider > MusicProvider > AppContent
+    App.css             # Minimal overrides (button transitions, motion-page)
+    index.css           # Tailwind directives, CSS variables, safe-area classes, scrollbar, glow utilities
+
+    context/
+      AppContext.js      # ALL app state — reducer, GAS sync, daily reset, auto-submit, quest lookup
+      MusicContext.js    # Music toggle state — play/pause/sync background track
+
+    data/
+      blueprint.js       # The 6-floor goal hierarchy: floors > rooms > goals > quests
+      loadouts.js        # Preset quest-ID bundles: FOUNDER_GRIND, RECOVERY_WEEK
+
+    components/
+      WelcomeScreen.jsx  # Entry screen — background image, scan-line animation, ENTER button
+      PlanningMode.jsx   # Split layout: Building (desktop left) + CommandCenter (right/full mobile)
+      CommandCenter.jsx  # Quest selection UI — floor/room accordions, EP budget, loadouts, launch button, custom quest form
+      TrackingMode.jsx   # Active sprint — progress ring, streak counter, daily/weekly task cards, submit button, confetti overlay
+      HQVisitMode.jsx    # Building inspection view + return button
+      Building.jsx       # Visual building facade — 6 floors of window panes that glow green when active
+      ProgressRing.jsx   # SVG circular progress indicator
+      VoltMascot.jsx     # Floating bot icon (bottom-right) with expandable chat bubble
+
+    hooks/
+      usePWA.js          # Service worker registration + notification permission request
+      use-toast.js       # Sonner toast hook (shadcn pattern)
+
+    utils/
+      istUtils.js        # IST timezone engine — date/hour helpers, sprint deadline calc, week range formatting
+      audioEngine.js     # Web Audio API — tone generator, background melody scheduler, SFX functions
+
+    lib/
+      utils.js           # Tailwind cn() merge utility (clsx + tailwind-merge)
+```
+
+## Core Data Model
+
+### Blueprint (blueprint.js)
+6 floors, each with rooms, each with goals, each with quests:
+```
+Floor (f0-f5) → Room (rA, rB, ...) → Goal → Quest
+```
+- **Floor 0**: Health & Basics
+- **Floor 1**: Focus & Time Management
+- **Floor 2**: Learning & Thinking
+- **Floor 3**: People & Relationships
+- **Floor 4**: Business & Wealth
+- **Floor 5**: Rewards & Giving Back
+
+### ID Format
+`{floorId}-r{roomKey}-g{goalIndex}-q{questIndex}` — e.g. `f0-rA-g0-q0`
+Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
+
+### Goal Tags & EP Costs
+| Tag | EP Cost |
+|-----|---------|
+| Daily Power-Up | 2 |
+| Autopilot Bots | 2 |
+| Big Missions | 4 |
+| Locked | 0 (disabled) |
+
+**Budget**: 20 EP max per sprint. Floor 0+1 EP tracked separately via `calcFloor01EP`.
+
+### Quest Frequencies
+- **Daily**: Reset at IST 3:00 AM (`completedTodayIds` cleared). Must be re-checked each day.
+- **Weekly/Monthly/Quarterly**: Persist across the sprint in `completedWeeklyIds`. Cleared on submit.
+
+## State Management (AppContext.js)
+
+### Key State Shape
+```js
+{
+  appView: 'welcome' | 'planning' | 'tracking' | 'hq-visit',
+  xp: number,              // +1 per perfect (100%) sprint
+  streak: number,           // consecutive days with all dailies done
+  buffers: number,          // 0-2, forgiveness tokens per month
+  blueprint: object,        // full goal hierarchy + customGoals per room
+  activeSprint: {
+    selectedQuestIds: [],   // chosen quests for this week
+    completedTodayIds: [],      // daily tasks checked off today (reset at IST 3AM)
+    completedWeeklyIds: [],     // weekly+ tasks checked off (persist across days)
+    sprintStartDate: ISO,       // when LAUNCH MISSION was clicked
+    yesterdayProgress: num,      // previous day's daily completion %
+    dailyCompletionHistory: [], // array of daily scores (0-1 fraction) accumulated at each 3AM reset
+  },
+  avgCompletion: number,    // running average across all sprints
+  sprintCount: number,
+  lastSprintQuestIds: [],   // for "REPEAT LAST WEEK" loadout
+}
+```
+
+### Reducer Actions
+| Action | Effect |
+|--------|--------|
+| `LOAD_STATE` | Hydrate from localStorage or GAS |
+| `SET_VIEW` | Navigate between views |
+| `TOGGLE_SPRINT_QUEST` | Select/deselect a quest (EP budget enforced) |
+| `LAUNCH_MISSION` | Lock selections, set sprintStartDate, go to tracking |
+| `TOGGLE_COMPLETE` | Check/uncheck a task (daily vs weekly tracked separately) |
+| `SUBMIT_MISSION` | End sprint, calc %, update XP, trigger GAS log |
+| `AUTO_SUBMIT_SPRINT` | Fires at IST Sunday 23:59 if sprint is still active |
+| `DAILY_RESET` | IST 3AM — clears daily completions, updates streak/buffers |
+| `ADD_CUSTOM_GOAL` | Add user-defined goal+quest to a room |
+| `LOAD_LOADOUT` | Bulk-set selectedQuestIds from a preset |
+| `RESET_SPRINT` | Clear all selections |
+
+### Persistence
+- **localStorage** (`superhero_hq_v2`): Full state saved immediately on every change.
+- **GAS POST**: Debounced 3s. Sends lightweight payload (blueprint replaced with just customGoals ~2KB).
+- **GAS GET**: Used on first load if no localStorage (new device).
+
+## Google Apps Script Integration
+
+**GAS URL**: Stored in `AppContext.js` as `GAS_URL`.
+**Sheet ID**: `1n75In-uqipFeZcigKUyLgK_F21cTnXmY9gYPwQRnMWE`
+
+### Sheets
+| Sheet | Purpose |
+|-------|---------|
+| `State` | Cell A1 stores JSON blob of app state (for cross-device sync) |
+| `WeeklyLogs` | Append-only log: `[timestamp, weekRange, %, xpEarned, totalQuests, completedQuests]` |
+| `Weekly Goals` | Append-only: `[S.no, weekRange, completion%, goal1Name, goal2Name, ..., goal19Name]` |
+
+### Payloads
+- **State save**: `POST { xp, streak, buffers, activeSprint, _customGoals, ... }` (no `action` field)
+- **Sprint log**: `POST { action: 'log', week, percentage, xpEarned, totalQuests, completedQuests, goalNames[] }`
+
+The `goalNames` array contains unique goal names (including custom goals) from the sprint's `selectedQuestIds`.
+
+## Sprint Lifecycle
+
+1. **Planning** → User selects quests (or loads a preset). EP budget enforced (max 20).
+2. **Launch** → `sprintStartDate` set. View switches to Tracking.
+3. **Tracking** → User checks off daily tasks (reset at IST 3AM) and weekly tasks (persist).
+4. **Submit** → User clicks "END & SUBMIT" or auto-submit fires at IST Sunday 23:59.
+5. **Result** → Completion % shown with confetti. XP awarded if 100%. Logged to GAS.
+6. **Reset** → Sprint cleared. Back to Planning for next week.
+
+## PWA & Mobile
+
+- `viewport-fit=cover` + `black-translucent` status bar for iOS notch support.
+- `.safe-top` / `.safe-bottom` CSS classes use `env(safe-area-inset-*)`.
+- Heights use `100dvh` (dynamic viewport height) to handle mobile browser chrome.
+- Service worker handles caching and daily reset notification scheduling.
+
+## Time Engine (istUtils.js)
+
+All time logic is IST (Asia/Kolkata, UTC+5:30):
+- `getISTDate()` / `getISTHour()` — current IST date/hour
+- `getSprintDeadlineIST(launchTimestamp)` — next Sunday 23:59:59 IST
+- `isSprintExpired(sprintStartDate)` — is the deadline past?
+- `formatWeekRange(sprintStartDate)` — "20 Apr 26 - 26 Apr 26" format
+
+## Build & Deploy
+
+```bash
+cd frontend
+npm install
+npm run build        # outputs to frontend/build/
+npm run deploy       # gh-pages push to GitHub Pages
+```
+
+Homepage configured as `"."` in package.json for relative paths.

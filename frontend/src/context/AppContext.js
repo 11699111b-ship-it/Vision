@@ -70,6 +70,7 @@ const initialState = {
     completedWeeklyIds: [],
     sprintStartDate: null,
     yesterdayProgress: null,
+    dailyCompletionHistory: [],
   },
   avgCompletion: 0,
   sprintCount: 0,
@@ -169,59 +170,82 @@ function reducer(state, action) {
 
     case 'SUBMIT_MISSION': {
       const { activeSprint } = state;
-      const { selectedQuestIds, completedTodayIds, completedWeeklyIds } = activeSprint;
+      const { selectedQuestIds, completedTodayIds, completedWeeklyIds, dailyCompletionHistory } = activeSprint;
       const total = selectedQuestIds.length;
       if (total === 0) return { ...state, appView: 'planning', submissionResult: { percentage: 0, isPerfect: false } };
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
       const nonDailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency !== 'Daily');
-      const completedD = dailyIds.filter(id => completedTodayIds.includes(id)).length;
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
-      const percentage = Math.round(((completedD + completedW) / total) * 100);
+
+      // Include today's daily score in history, then average all days
+      const todayDailyDone = dailyIds.filter(id => completedTodayIds.includes(id)).length;
+      const todayScore = dailyIds.length > 0 ? todayDailyDone / dailyIds.length : 1;
+      const allDailyScores = [...(dailyCompletionHistory || []), todayScore];
+      const avgDailyPct = allDailyScores.length > 0
+        ? allDailyScores.reduce((s, v) => s + v, 0) / allDailyScores.length
+        : 1;
+
+      // Weighted: daily tasks contribute their averaged score, weekly tasks contribute their completion
+      const dailyContribution = avgDailyPct * dailyIds.length;
+      const weeklyContribution = completedW;
+      const percentage = Math.round(((dailyContribution + weeklyContribution) / total) * 100);
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
+      const goalNames = [...new Set(selectedQuestIds.map(id => lookup[id]?.goal.name).filter(Boolean))];
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
-        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: completedD + completedW },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
-        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
+        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
       };
     }
 
     // ── Auto-submit (IST Sunday midnight deadline reached) ───────────────────
     case 'AUTO_SUBMIT_SPRINT': {
       const { activeSprint } = state;
-      const { selectedQuestIds, completedTodayIds, completedWeeklyIds } = activeSprint;
+      const { selectedQuestIds, completedTodayIds, completedWeeklyIds, dailyCompletionHistory } = activeSprint;
       const total = selectedQuestIds.length;
       if (total === 0) {
         return {
           ...state,
           appView: 'planning',
           autoSubmittedMessage: 'Boss Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
-          activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
+          activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         };
       }
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
       const nonDailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency !== 'Daily');
-      const completedD = dailyIds.filter(id => completedTodayIds.includes(id)).length;
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
-      const percentage = Math.round(((completedD + completedW) / total) * 100);
+
+      // Include today's daily score in history, then average all days
+      const todayDailyDone = dailyIds.filter(id => completedTodayIds.includes(id)).length;
+      const todayScore = dailyIds.length > 0 ? todayDailyDone / dailyIds.length : 1;
+      const allDailyScores = [...(dailyCompletionHistory || []), todayScore];
+      const avgDailyPct = allDailyScores.length > 0
+        ? allDailyScores.reduce((s, v) => s + v, 0) / allDailyScores.length
+        : 1;
+
+      const dailyContribution = avgDailyPct * dailyIds.length;
+      const weeklyContribution = completedW;
+      const percentage = Math.round(((dailyContribution + weeklyContribution) / total) * 100);
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
+      const goalNames = [...new Set(selectedQuestIds.map(id => lookup[id]?.goal.name).filter(Boolean))];
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
-        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: completedD + completedW },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
-        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
+        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         appView: 'planning',
       };
     }
@@ -267,9 +291,14 @@ function reducer(state, action) {
 
       // Only Daily-frequency tasks count for daily progress score
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
+      const dailyDoneCount = completedTodayIds.filter(id => dailyIds.includes(id)).length;
       const yp = dailyIds.length > 0
-        ? Math.round((completedTodayIds.filter(id => dailyIds.includes(id)).length / dailyIds.length) * 100)
+        ? Math.round((dailyDoneCount / dailyIds.length) * 100)
         : 100;
+
+      // Record today's daily score (as fraction 0-1) for weekly average calc
+      const todayScore = dailyIds.length > 0 ? dailyDoneCount / dailyIds.length : 1;
+      const updatedHistory = [...(activeSprint.dailyCompletionHistory || []), todayScore];
 
       let ns = streak, nb = buffers;
       if (yp >= 100) { ns = streak + 1; }
@@ -287,8 +316,8 @@ function reducer(state, action) {
         buffers: Math.min(2, nb),
         lastResetDate: istDateStr,
         lastBufferResetMonth: cm,
-        // completedTodayIds cleared (Daily only) — completedWeeklyIds preserved
-        activeSprint: { ...activeSprint, completedTodayIds: [], yesterdayProgress: yp },
+        // completedTodayIds cleared (Daily only) — completedWeeklyIds + dailyCompletionHistory preserved
+        activeSprint: { ...activeSprint, completedTodayIds: [], yesterdayProgress: yp, dailyCompletionHistory: updatedHistory },
       };
     }
 
@@ -305,6 +334,7 @@ function reducer(state, action) {
           completedWeeklyIds: [],
           sprintStartDate: null,
           yesterdayProgress: null,
+          dailyCompletionHistory: [],
         },
       };
 
@@ -428,13 +458,14 @@ export function AppProvider({ children }) {
   // ── 2b. Fire weekly log POST when a mission is submitted ────────────────────
   useEffect(() => {
     if (!state._pendingLog) return;
-    const { sprintStartDate, percentage, xpEarned, total, completed } = state._pendingLog;
+    const { sprintStartDate, percentage, xpEarned, total, completed, goalNames } = state._pendingLog;
     logToGAS({
       week: formatWeekRange(sprintStartDate),
       percentage,
       xpEarned,
       totalQuests: total,
       completedQuests: completed,
+      goalNames: goalNames || [],
     });
     dispatch({ type: '_CLEAR_LOG' });
   }, [state._pendingLog]);
