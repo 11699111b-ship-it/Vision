@@ -33,10 +33,10 @@ frontend/
 
     components/
       WelcomeScreen.jsx  # Entry screen — background image, scan-line animation, ENTER button
-      PlanningMode.jsx   # Split layout: Building (desktop left) + CommandCenter (right/full mobile)
+      PlanningMode.jsx   # Split layout: Building (desktop left) + CommandCenter (right/full mobile). Top bar: HeroTag, EP, StreakBadge, MusicBtn
       CommandCenter.jsx  # Quest selection UI — floor/room accordions, EP budget, loadouts, launch button, custom quest form
-      TrackingMode.jsx   # Active sprint — progress ring, streak counter, daily/weekly task cards, submit button, confetti overlay
-      HQVisitMode.jsx    # Building inspection view + return button
+      TrackingMode.jsx   # Active sprint — progress ring, streak counter, daily/weekly task cards, submit button, confetti overlay. Top bar: StreakBadge, MusicBtn
+      HQVisitMode.jsx    # Building inspection view + return button. Top bar: StreakBadge, MusicBtn
       Building.jsx       # Visual building facade — 6 floors of window panes that glow green when active
       ProgressRing.jsx   # SVG circular progress indicator
       VoltMascot.jsx     # Floating bot icon (bottom-right) with expandable chat bubble
@@ -119,7 +119,7 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 | `TOGGLE_COMPLETE` | Check/uncheck a task (daily vs weekly tracked separately) |
 | `SUBMIT_MISSION` | End sprint, calc %, update XP, trigger GAS log |
 | `AUTO_SUBMIT_SPRINT` | Fires at IST Sunday 23:59 if sprint is still active |
-| `DAILY_RESET` | IST 3AM — clears daily completions, updates streak/buffers |
+| `DAILY_RESET` | IST 3AM — records daily score to `dailyCompletionHistory`, clears daily completions, updates streak/buffers |
 | `ADD_CUSTOM_GOAL` | Add user-defined goal+quest to a room |
 | `LOAD_LOADOUT` | Bulk-set selectedQuestIds from a preset |
 | `RESET_SPRINT` | Clear all selections |
@@ -176,8 +176,20 @@ All time logic is IST (Asia/Kolkata, UTC+5:30):
 ```bash
 cd frontend
 npm install
-npm run build        # outputs to frontend/build/
-npm run deploy       # gh-pages push to GitHub Pages
+npm run build        # craco build, outputs to frontend/build/
+npm run deploy       # gh-pages -d build → pushes to GitHub Pages
 ```
 
 Homepage configured as `"."` in package.json for relative paths.
+
+## UI Components Present on All Views
+
+- **StreakBadge**: Flame icon + streak count. Orange when active (streak > 0), muted grey when 0. Shows on PlanningMode, TrackingMode, HQVisitMode top bars.
+- **MusicBtn**: Volume toggle for 8-bit background track. Shows on all three main views.
+- **VoltMascot**: Floating bot (bottom-right, respects safe-area-inset-bottom). Shows on all views except Welcome.
+
+## Streak & Buffer System
+
+- **Streak**: Incremented at IST 3AM if all daily quests were completed that day. Reset to 0 if missed and no buffer available.
+- **Buffers**: 2 per month, auto-reset on the 1st. Consumed when dailies < 100% to protect streak. Max 2, no way to earn extra.
+- **Completion %**: Separate from streak. Uses averaged daily scores across all days of the sprint, weighted with weekly task completion.

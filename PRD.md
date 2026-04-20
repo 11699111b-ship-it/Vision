@@ -80,10 +80,12 @@ This means a user who does dailies perfectly Mon-Sat but misses Sunday still get
 Full-screen entry with background image, scan-line animation, title "SUPERHERO HQ." Click "ENTER" to proceed. Initializes audio engine and background music.
 
 ### Planning Mode (Desktop: Split | Mobile: Full)
+- **Top bar**: HQ title, HeroTag (level + XP), EP count, StreakBadge (flame + count), MusicBtn
 - **Left panel (desktop only)**: Building facade visualization. Floors glow green when they have active quests. Shows selected tasks receipt grouped by goal.
 - **Right panel (full on mobile)**: CommandCenter — smart loadouts, EP budget bar, floor > room > goal > quest accordion, custom quest form, LAUNCH MISSION button.
 
 ### Tracking Mode
+- **Top bar**: VISIT HQ button, "ACTIVE PROTOCOL" title, StreakBadge, MusicBtn
 - Progress ring showing daily completion %
 - Streak counter (X DAYS) with buffer badge
 - Daily Protocol section — task cards for daily quests
@@ -92,7 +94,8 @@ Full-screen entry with background image, scan-line animation, title "SUPERHERO H
 - Submission overlay with score, label (MISSION ACCOMPLISHED / SOLID EFFORT / RESET & CONQUER), and confetti
 
 ### HQ Visit Mode
-Building visualization + "BASE INSPECTION" panel with return button. Accessible during active sprint via nav button.
+- **Top bar**: "BASE INSPECTION" title, StreakBadge, MusicBtn
+- Building visualization + return panel. Accessible during active sprint via nav button.
 
 ### Volt Mascot
 Floating bot icon (bottom-right, above safe area). Expands to show contextual chat bubble with status messages. Present on all views except Welcome.
