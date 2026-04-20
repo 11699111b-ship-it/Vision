@@ -10,3 +10,6 @@ button, [role="button"] { user-select: none; -webkit-user-select: none; }
 
 /* Framer Motion page wrapper */
 .motion-page { width: 100%; height: 100%; }
+
+/* Spinner used in WelcomeScreen loading state */
+@keyframes spin { to { transform: rotate(360deg); } }

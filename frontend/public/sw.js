@@ -3,9 +3,12 @@
 
 const CACHE = 'superhero-hq-v2';
 
+// Resolve base path from SW scope (works under subpath like /Vision/)
+const BASE = new URL('.', self.location).pathname;
+
 const APP_SHELL = [
-  '/',
-  '/index.html',
+  BASE,
+  `${BASE}index.html`,
 ];
 
 // ── Install: cache app shell ─────────────────────────────────────────────────
@@ -44,7 +47,7 @@ self.addEventListener('fetch', e => {
         return res;
       }).catch(() => null);
 
-      return cached || networkFetch || caches.match('/index.html');
+      return cached || networkFetch || caches.match(`${BASE}index.html`);
     })
   );
 });
@@ -57,8 +60,8 @@ self.addEventListener('push', e => {
       data.title || 'Superhero HQ — Daily Reset',
       {
         body: data.body || 'New day begins. Quests reset. Level up, Boss Anurag.',
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: `${BASE}icon-192.png`,
+        badge: `${BASE}icon-192.png`,
         vibrate: [200, 100, 200],
         tag: 'daily-reset',
         renotify: true,
@@ -75,7 +78,7 @@ self.addEventListener('notificationclick', e => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
       const found = all.find(c => c.url.includes(self.location.origin) && 'focus' in c);
       if (found) return found.focus();
-      return clients.openWindow('/');
+      return clients.openWindow(BASE);
     })
   );
 });
@@ -104,8 +107,8 @@ function scheduleDailyReset() {
     if (self.Notification && self.Notification.permission === 'granted') {
       self.registration.showNotification('Superhero HQ — New Day', {
         body: 'Daily quests reset. Start strong, Boss Anurag.',
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: `${BASE}icon-192.png`,
+        badge: `${BASE}icon-192.png`,
         tag: 'daily-reset',
         renotify: true,
         vibrate: [150, 50, 150],

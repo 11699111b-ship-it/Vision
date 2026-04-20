@@ -6,7 +6,7 @@ import { initAudio, startBgTrack } from '../utils/audioEngine';
 const WELCOME_BG = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80';
 
 export default function WelcomeScreen() {
-  const { dispatch } = useAppContext();
+  const { dispatch, isLoading } = useAppContext();
 
   const handleEnter = () => {
     localStorage.setItem('hq_entered', '1');
@@ -79,27 +79,50 @@ export default function WelcomeScreen() {
           THE 6-FLOOR MASTER BLUEPRINT FOR <span style={{ color: '#39FF14' }}>ANURAG</span>
         </motion.p>
 
-        <motion.button
-          data-testid="enter-hq-button"
-          onClick={handleEnter}
-          className="font-orbitron font-black text-base tracking-[0.3em] uppercase px-14 py-5 relative overflow-hidden"
-          style={{
-            background: 'transparent',
-            border: '2px solid #39FF14',
-            color: '#39FF14',
-            cursor: 'pointer',
-          }}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.3 }}
-          whileHover={{
-            boxShadow: '0 0 50px rgba(57,255,20,0.6), inset 0 0 20px rgba(57,255,20,0.1)',
-            scale: 1.02,
-          }}
-          whileTap={{ scale: 0.96 }}
-        >
-          ENTER HQ
-        </motion.button>
+        {isLoading ? (
+          <motion.div
+            className="flex flex-col items-center gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.3 }}
+          >
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                border: '3px solid rgba(57,255,20,0.2)',
+                borderTopColor: '#39FF14',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }}
+            />
+            <p className="font-orbitron text-xs tracking-[0.3em] uppercase" style={{ color: '#39FF14' }}>
+              SYNCING DATA...
+            </p>
+          </motion.div>
+        ) : (
+          <motion.button
+            data-testid="enter-hq-button"
+            onClick={handleEnter}
+            className="font-orbitron font-black text-base tracking-[0.3em] uppercase px-14 py-5 relative overflow-hidden"
+            style={{
+              background: 'transparent',
+              border: '2px solid #39FF14',
+              color: '#39FF14',
+              cursor: 'pointer',
+            }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            whileHover={{
+              boxShadow: '0 0 50px rgba(57,255,20,0.6), inset 0 0 20px rgba(57,255,20,0.1)',
+              scale: 1.02,
+            }}
+            whileTap={{ scale: 0.96 }}
+          >
+            ENTER HQ
+          </motion.button>
+        )}
 
         <motion.div className="flex items-center justify-center gap-6 mt-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6 }}>
           {['6 FLOORS', '20 EP BUDGET', '100+ QUESTS'].map((label) => (

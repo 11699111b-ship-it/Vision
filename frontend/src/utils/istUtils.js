@@ -45,3 +45,13 @@ export function isSprintExpired(sprintStartDate) {
   const deadline = getSprintDeadlineIST(sprintStartDate);
   return deadline ? nowIST > deadline : false;
 }
+
+// Formats "10 Feb 26 - 17 Feb 26" style week range from sprint start → end (IST)
+export function formatWeekRange(sprintStartDate) {
+  if (!sprintStartDate) return '';
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const start = new Date(new Date(sprintStartDate).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const fmt = (d) => `${d.getDate()} ${months[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  const endIST = getISTNow();
+  return `${fmt(start)} - ${fmt(endIST)}`;
+}

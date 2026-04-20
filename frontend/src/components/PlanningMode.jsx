@@ -37,6 +37,22 @@ function MusicBtn() {
 
 // ── Minimalist Selected Tasks Receipt (desktop only — below building) ──────────
 // Shows each selected ACTIVITY grouped under its parent Goal label
+function HeroTag() {
+  const { heroInfo, xp } = useAppContext();
+  return (
+    <span style={{
+      fontSize: 10,
+      fontFamily: 'Space Mono, monospace',
+      color: '#00E5FF',
+      border: '1px solid rgba(0,229,255,0.25)',
+      padding: '2px 6px',
+      letterSpacing: '0.05em',
+    }}>
+      {heroInfo.emoji} {heroInfo.name.toUpperCase()} · {xp} XP
+    </span>
+  );
+}
+
 function SelectedTasksReceipt() {
   const { activeSprint, questLookup } = useAppContext();
   const { selectedQuestIds } = activeSprint;
@@ -135,8 +151,9 @@ export default function PlanningMode() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <HeroTag />
           <p style={{ fontSize: 11, color: '#8B8B8D', fontFamily: 'Space Mono, monospace', margin: 0 }}>
-            <span className="hidden sm:inline">BUILD YOUR WEEK · </span>20 EP
+            <span className="hidden sm:inline">· </span>20 EP
           </p>
           <MusicBtn />
         </div>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import INITIAL_BLUEPRINT, { EP_COSTS } from '../data/blueprint';
-import { getISTDate, getISTHour, isSprintExpired } from '../utils/istUtils';
+import { getISTDate, getISTHour, isSprintExpired, formatWeekRange } from '../utils/istUtils';
 
 const STORAGE_KEY = 'superhero_hq_v2';
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzyZTaQOLvFsmD1DCZbKgYtbzHOXi4iA8gMFEI4yV9N6Vr5pTlPOAwR_NM-L_w_nTtF/exec';
@@ -71,6 +71,8 @@ const initialState = {
     sprintStartDate: null,
     yesterdayProgress: null,
   },
+  avgCompletion: 0,
+  sprintCount: 0,
   launchError: null,
   submissionResult: null,
   lastSprintQuestIds: [],
@@ -83,6 +85,25 @@ function reducer(state, action) {
   switch (action.type) {
     case 'LOAD_STATE': {
       const p = action.payload;
+      const sprint = p.activeSprint ?? initialState.activeSprint;
+      const hasMission = !!sprint.sprintStartDate;
+      let view = p.appView === 'welcome' ? 'planning' : (p.appView || 'planning');
+      if (hasMission) view = 'tracking';
+      // Reconstruct blueprint: if full blueprint present (localStorage), use it.
+      // If only _customGoals (GAS), inject them into INITIAL_BLUEPRINT.
+      let bp;
+      if (p.blueprint) {
+        bp = mergeBlueprint(INITIAL_BLUEPRINT, p.blueprint);
+      } else {
+        bp = JSON.parse(JSON.stringify(INITIAL_BLUEPRINT));
+        if (p._customGoals) {
+          p._customGoals.forEach(({ floorId, roomId, customGoals }) => {
+            const floor = bp.floors.find(f => f.id === floorId);
+            const room = floor?.rooms.find(r => r.id === roomId);
+            if (room) room.customGoals = customGoals;
+          });
+        }
+      }
       return {
         ...state,
         xp: p.xp ?? 0,
@@ -90,9 +111,11 @@ function reducer(state, action) {
         buffers: p.buffers ?? 2,
         lastResetDate: p.lastResetDate ?? null,
         lastBufferResetMonth: p.lastBufferResetMonth ?? null,
-        blueprint: mergeBlueprint(INITIAL_BLUEPRINT, p.blueprint),
-        activeSprint: p.activeSprint ?? initialState.activeSprint,
-        appView: p.appView === 'welcome' ? 'planning' : (p.appView || 'planning'),
+        blueprint: bp,
+        activeSprint: sprint,
+        appView: view,
+        avgCompletion: p.avgCompletion ?? 0,
+        sprintCount: p.sprintCount ?? 0,
         lastSprintQuestIds: p.lastSprintQuestIds ?? [],
       };
     }
@@ -155,10 +178,15 @@ function reducer(state, action) {
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
       const percentage = Math.round(((completedD + completedW) / total) * 100);
       const isPerfect = percentage === 100;
+      const newCount = state.sprintCount + 1;
+      const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
+        sprintCount: newCount,
+        avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: completedD + completedW },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
       };
@@ -183,15 +211,23 @@ function reducer(state, action) {
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
       const percentage = Math.round(((completedD + completedW) / total) * 100);
       const isPerfect = percentage === 100;
+      const newCount = state.sprintCount + 1;
+      const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
+        sprintCount: newCount,
+        avgCompletion: newAvg,
         autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: completedD + completedW },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null },
         appView: 'planning',
       };
     }
+
+    case '_CLEAR_LOG':
+      return { ...state, _pendingLog: null };
 
     case 'CLEAR_AUTO_SUBMIT':
       return { ...state, autoSubmittedMessage: null };
@@ -301,14 +337,37 @@ function reducer(state, action) {
 
 const AppContext = createContext(null);
 
+// ── Strip blueprint to only customGoals (reduces ~78KB → <2KB) ──────────────
+function extractCustomGoals(blueprint) {
+  if (!blueprint?.floors) return [];
+  return blueprint.floors.reduce((acc, floor) => {
+    floor.rooms.forEach(room => {
+      if (room.customGoals?.length) {
+        acc.push({ floorId: floor.id, roomId: room.id, customGoals: room.customGoals });
+      }
+    });
+    return acc;
+  }, []);
+}
+
+// ── POST to GAS via form-encoded fetch ──────────────────────────────────────
+// GAS processes doPost BEFORE returning 302 redirect. The redirect may trigger
+// a CORS error in the console — that's expected and harmless (data is already written).
+function postToGAS(payload) {
+  const json = JSON.stringify(payload);
+  const params = new URLSearchParams();
+  params.append('payload', json);
+  fetch(GAS_URL, { method: 'POST', body: params }).catch(() => {});
+}
+
+// ── Log a weekly mission result to GAS "Weekly Logs" sheet ──────────────────
+function logToGAS(logEntry) {
+  postToGAS({ action: 'log', ...logEntry });
+}
+
 // ── Async GAS save (debounced, fire-and-forget) ──────────────────────────────
 function saveToGAS(data) {
-  fetch(GAS_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(data),
-  }).catch(() => {});
+  postToGAS(data);
 }
 
 export function AppProvider({ children }) {
@@ -317,30 +376,33 @@ export function AppProvider({ children }) {
   const saveTimerRef = useRef(null);
   const initialLoadDone = useRef(false);
 
-  // ── 1. Load state from GAS on mount (with localStorage fallback) ────────────
+  // ── 1. Load state: localStorage first (instant), GAS fallback (cross-device) ─
   useEffect(() => {
     const load = async () => {
+      // 1a. Try localStorage (always up-to-date on same device)
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const hasEntered = localStorage.getItem('hq_entered');
+        if (raw && hasEntered) {
+          dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
+          setIsLoading(false);
+          return;
+        }
+      } catch { /* ignore */ }
+
+      // 1b. No local data — try GAS (new device / fresh browser)
       try {
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 8000); // 8s timeout
+        const tid = setTimeout(() => controller.abort(), 8000);
         const res = await fetch(GAS_URL, { signal: controller.signal });
         clearTimeout(tid);
         const data = await res.json();
         if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
           dispatch({ type: 'LOAD_STATE', payload: data });
-        } else {
-          throw new Error('empty');
         }
-      } catch {
-        // Fallback to localStorage
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          const hasEntered = localStorage.getItem('hq_entered');
-          if (raw && hasEntered) dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
-        } catch { /* ignore */ }
-      } finally {
-        setIsLoading(false);
-      }
+      } catch { /* ignore */ }
+
+      setIsLoading(false);
     };
     load();
   }, []);
@@ -350,16 +412,32 @@ export function AppProvider({ children }) {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
-    const { appView, launchError, submissionResult, autoSubmittedMessage, ...toSave } = state;
+    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
 
-    // localStorage — immediate, offline resilient
+    // localStorage — full state (immediate, offline resilient)
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave)); } catch { /* ignore */ }
 
-    // GAS — debounced 3 seconds
+    // GAS — lightweight: replace full blueprint with just customGoals (~78KB → <2KB)
+    const gasPayload = { ...toSave, _customGoals: extractCustomGoals(toSave.blueprint) };
+    delete gasPayload.blueprint;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => saveToGAS(toSave), 3000);
+    saveTimerRef.current = setTimeout(() => saveToGAS(gasPayload), 3000);
   }, [state, isLoading]);
+
+  // ── 2b. Fire weekly log POST when a mission is submitted ────────────────────
+  useEffect(() => {
+    if (!state._pendingLog) return;
+    const { sprintStartDate, percentage, xpEarned, total, completed } = state._pendingLog;
+    logToGAS({
+      week: formatWeekRange(sprintStartDate),
+      percentage,
+      xpEarned,
+      totalQuests: total,
+      completedQuests: completed,
+    });
+    dispatch({ type: '_CLEAR_LOG' });
+  }, [state._pendingLog]);
 
   // ── 3. IST 3AM Daily Reset (checks every 60s, only resets Daily tasks) ──────
   useEffect(() => {

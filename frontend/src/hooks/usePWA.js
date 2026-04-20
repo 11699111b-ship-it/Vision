@@ -6,7 +6,8 @@ export function usePWA() {
 
     const register = async () => {
       try {
-        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        const base = process.env.PUBLIC_URL || '';
+        const reg = await navigator.serviceWorker.register(`${base}/sw.js`, { scope: `${base}/` });
         // Tell SW to schedule the daily-reset notification
         const sw = reg.active || reg.installing || reg.waiting;
         if (sw) {

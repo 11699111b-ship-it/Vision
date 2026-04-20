@@ -21,7 +21,7 @@ function getVoltData(appView, floor01EP, upkeepMin, selectedCount) {
 
 export default function VoltMascot() {
   const { appView, floor01EP, UPKEEP_MIN_EP, activeSprint } = useAppContext();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   const voltData = getVoltData(
     appView,
@@ -83,8 +83,8 @@ export default function VoltMascot() {
           boxShadow: voltData.urgent ? '0 0 20px rgba(255,59,48,0.4)' : '0 0 20px rgba(0,229,255,0.3)',
           borderRadius: 0,
         }}
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        whileHover={{ y: -4 }}
+        transition={{ duration: 0.2 }}
         whileTap={{ scale: 0.9 }}
       >
         <Bot size={22} color={voltData.urgent ? '#FF3B30' : '#00E5FF'} />
