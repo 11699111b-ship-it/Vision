@@ -160,13 +160,18 @@ function reducer(state, action) {
       if (activeSprint.selectedQuestIds.length === 0) {
         return { ...state, launchError: 'Select at least one quest to launch the mission!' };
       }
+      const goalNames = activeSprint.selectedQuestIds.map(id => lookup[id]?.quest.text).filter(Boolean);
       return {
         ...state,
         appView: 'tracking',
         launchError: null,
         activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() },
+        _pendingGoalLog: { goalNames },
       };
     }
+
+    case '_CLEAR_GOAL_LOG':
+      return { ...state, _pendingGoalLog: null };
 
     case 'SUBMIT_MISSION': {
       const { activeSprint } = state;
@@ -192,14 +197,13 @@ function reducer(state, action) {
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
-      const goalNames = [...new Set(selectedQuestIds.map(id => lookup[id]?.goal.name).filter(Boolean))];
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
-        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution) },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
       };
@@ -236,14 +240,13 @@ function reducer(state, action) {
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
-      const goalNames = [...new Set(selectedQuestIds.map(id => lookup[id]?.goal.name).filter(Boolean))];
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
-        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution) },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         appView: 'planning',
@@ -301,7 +304,7 @@ function reducer(state, action) {
       const updatedHistory = [...(activeSprint.dailyCompletionHistory || []), todayScore];
 
       let ns = streak, nb = buffers;
-      if (yp >= 100) { ns = streak + 1; }
+      if (yp >= 90) { ns = streak + 1; }
       else { if (nb > 0) { nb -= 1; } else { ns = 0; } }
 
       // IST-based date + monthly buffer reset on 1st of month
@@ -442,7 +445,7 @@ export function AppProvider({ children }) {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
-    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, ...toSave } = state;
+    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
 
     // localStorage — full state (immediate, offline resilient)
@@ -458,17 +461,26 @@ export function AppProvider({ children }) {
   // ── 2b. Fire weekly log POST when a mission is submitted ────────────────────
   useEffect(() => {
     if (!state._pendingLog) return;
-    const { sprintStartDate, percentage, xpEarned, total, completed, goalNames } = state._pendingLog;
+    const { sprintStartDate, percentage, xpEarned, total, completed } = state._pendingLog;
+    const week = formatWeekRange(sprintStartDate);
     logToGAS({
-      week: formatWeekRange(sprintStartDate),
+      week,
       percentage,
       xpEarned,
       totalQuests: total,
       completedQuests: completed,
-      goalNames: goalNames || [],
     });
+    postToGAS({ action: 'update_goals', week, percentage });
     dispatch({ type: '_CLEAR_LOG' });
   }, [state._pendingLog]);
+
+  // ── 2c. Log goals to "Weekly Goals" sheet on mission launch ─────────────────
+  useEffect(() => {
+    if (!state._pendingGoalLog) return;
+    const { goalNames } = state._pendingGoalLog;
+    postToGAS({ action: 'log_goals', goalNames: goalNames || [] });
+    dispatch({ type: '_CLEAR_GOAL_LOG' });
+  }, [state._pendingGoalLog]);
 
   // ── 3. IST 3AM Daily Reset (checks every 60s, only resets Daily tasks) ──────
   useEffect(() => {

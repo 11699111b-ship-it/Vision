@@ -115,11 +115,11 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 | `LOAD_STATE` | Hydrate from localStorage or GAS |
 | `SET_VIEW` | Navigate between views |
 | `TOGGLE_SPRINT_QUEST` | Select/deselect a quest (EP budget enforced) |
-| `LAUNCH_MISSION` | Lock selections, set sprintStartDate, go to tracking |
+| `LAUNCH_MISSION` | Lock selections, set sprintStartDate, log goals to GAS, go to tracking |
 | `TOGGLE_COMPLETE` | Check/uncheck a task (daily vs weekly tracked separately) |
-| `SUBMIT_MISSION` | End sprint, calc %, update XP, trigger GAS log |
+| `SUBMIT_MISSION` | End sprint, calc %, update XP, trigger GAS log + update Weekly Goals completion |
 | `AUTO_SUBMIT_SPRINT` | Fires at IST Sunday 23:59 if sprint is still active |
-| `DAILY_RESET` | IST 3AM — records daily score to `dailyCompletionHistory`, clears daily completions, updates streak/buffers |
+| `DAILY_RESET` | IST 3AM — records daily score to `dailyCompletionHistory`, clears daily completions, updates streak (90% threshold)/buffers |
 | `ADD_CUSTOM_GOAL` | Add user-defined goal+quest to a room |
 | `LOAD_LOADOUT` | Bulk-set selectedQuestIds from a preset |
 | `RESET_SPRINT` | Clear all selections |
@@ -139,20 +139,20 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 |-------|---------|
 | `State` | Cell A1 stores JSON blob of app state (for cross-device sync) |
 | `WeeklyLogs` | Append-only log: `[timestamp, weekRange, %, xpEarned, totalQuests, completedQuests]` |
-| `Weekly Goals` | Append-only: `[S.no, weekRange, completion%, goal1Name, goal2Name, ..., goal19Name]` |
+| `Weekly Goals` | Two-phase: `[S.no, weekRange, completion%, goal1..goal19]` — goals logged at launch, completion filled on submit |
 
 ### Payloads
 - **State save**: `POST { xp, streak, buffers, activeSprint, _customGoals, ... }` (no `action` field)
-- **Sprint log**: `POST { action: 'log', week, percentage, xpEarned, totalQuests, completedQuests, goalNames[] }`
-
-The `goalNames` array contains unique goal names (including custom goals) from the sprint's `selectedQuestIds`.
+- **Sprint log**: `POST { action: 'log', week, percentage, xpEarned, totalQuests, completedQuests }`
+- **Goals log (launch)**: `POST { action: 'log_goals', goalNames[] }` — appends row with S.no + goals, Week and Completion % blank
+- **Goals update (submit)**: `POST { action: 'update_goals', week, percentage }` — fills Week and Completion % on the last blank row
 
 ## Sprint Lifecycle
 
 1. **Planning** → User selects quests (or loads a preset). EP budget enforced (max 20).
-2. **Launch** → `sprintStartDate` set. View switches to Tracking.
+2. **Launch** → `sprintStartDate` set. Goal names logged to "Weekly Goals" sheet (Phase 1). View switches to Tracking.
 3. **Tracking** → User checks off daily tasks (reset at IST 3AM) and weekly tasks (persist).
-4. **Submit** → User clicks "END & SUBMIT" or auto-submit fires at IST Sunday 23:59.
+4. **Submit** → User clicks "END & SUBMIT" or auto-submit fires at IST Sunday 23:59. Completion % + Week filled in "Weekly Goals" (Phase 2).
 5. **Result** → Completion % shown with confetti. XP awarded if 100%. Logged to GAS.
 6. **Reset** → Sprint cleared. Back to Planning for next week.
 
@@ -190,6 +190,6 @@ Homepage configured as `"."` in package.json for relative paths.
 
 ## Streak & Buffer System
 
-- **Streak**: Incremented at IST 3AM if all daily quests were completed that day. Reset to 0 if missed and no buffer available.
-- **Buffers**: 2 per month, auto-reset on the 1st. Consumed when dailies < 100% to protect streak. Max 2, no way to earn extra.
+- **Streak**: Incremented at IST 3AM if daily quest completion is 90% or higher. Reset to 0 if below 90% and no buffer available.
+- **Buffers**: 2 per month, auto-reset on the 1st. Consumed when dailies < 90% to protect streak. Max 2, no way to earn extra.
 - **Completion %**: Separate from streak. Uses averaged daily scores across all days of the sprint, weighted with weekly task completion.

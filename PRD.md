@@ -53,7 +53,7 @@ Preset quest bundles for quick selection:
 8. **Log** — results sent to Google Sheets (WeeklyLogs + Weekly Goals sheets)
 
 ### Streak System
-- **Streak**: Consecutive days where all daily quests are completed
+- **Streak**: Consecutive days where daily quest completion reaches 90% or higher
 - **Buffers**: 2 per month (reset on 1st). A missed day consumes a buffer instead of breaking the streak. Buffers protect streaks only — they don't affect completion %.
 - **Daily Reset**: IST 3:00 AM — records today's daily score to `dailyCompletionHistory`, clears `completedTodayIds`, evaluates yesterday's progress, updates streak/buffers
 
@@ -108,14 +108,17 @@ Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change.
 ### Google Apps Script (Cross-device backup)
 - **GET**: Returns state JSON from Sheet "State" cell A1. Used when no localStorage exists (new device).
 - **POST (state)**: Debounced 3s. Sends lightweight payload — full blueprint replaced with just `_customGoals` array (~2KB vs ~78KB).
-- **POST (log)**: On sprint submit. Appends to "WeeklyLogs" sheet and "Weekly Goals" sheet.
+- **POST (log)**: On sprint submit. Appends to "WeeklyLogs" sheet.
+- **POST (log_goals)**: On mission launch. Appends row to "Weekly Goals" sheet with S.no + goal names (Week and Completion % left blank).
+- **POST (update_goals)**: On sprint submit. Finds the last "Weekly Goals" row with empty Completion %, fills in Week dates and Completion %.
 
-### Weekly Goals Sheet Format
+### Weekly Goals Sheet Format (Two-Phase Logging)
 | S.no | Week | Completion % | Goal 1 | Goal 2 | ... | Goal 19 |
 |------|------|-------------|--------|--------|-----|---------|
 | 1 | 20 Apr 26 - 26 Apr 26 | 85% | Workout Goal | Meditation | ... | |
 
-Goal columns populated from unique goal names (including custom goals) of the sprint's selected quests.
+- **Phase 1 (Launch)**: Row created with S.no and goal names. Week and Completion % are blank.
+- **Phase 2 (Submit)**: Week dates and Completion % filled in (same format as WeeklyLogs).
 
 ## Design System
 

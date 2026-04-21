@@ -11,21 +11,35 @@ function doPost(e) {
     }
     var data = JSON.parse(raw);
 
+    // Phase 1: Log goals on mission launch (completion % and week left blank)
+    if (data.action === 'log_goals') {
+      logGoalsOnLaunch(ss, data);
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: 'goals_logged' })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Phase 2a: Update Weekly Goals row with completion % and week on submit
+    if (data.action === 'update_goals') {
+      updateGoalsOnSubmit(ss, data);
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: 'goals_updated' })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Phase 2b: Log to WeeklyLogs sheet on submit
     if (data.action === 'log') {
       var logSheet = ss.getSheetByName('WeeklyLogs');
       logSheet.appendRow([
         new Date(), data.week, data.percentage,
         data.xpEarned, data.totalQuests, data.completedQuests,
       ]);
-
-      // Also log to "Weekly Goals" sheet
-      logWeeklyGoals(ss, data);
-
       return ContentService.createTextOutput(
         JSON.stringify({ status: 'logged' })
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Default: save state
     stateSheet.getRange('A1').setValue(JSON.stringify(data));
     return ContentService.createTextOutput(
       JSON.stringify({ status: 'success' })
@@ -47,13 +61,10 @@ function doGet(e) {
 }
 
 /**
- * Appends a row to the "Weekly Goals" sheet.
- * Format: S.no | Week | Completion % | Goal 1 | Goal 2 | ... | Goal 19
- * - Week uses the same data.week string as WeeklyLogs (from formatWeekRange)
- * - Completion % comes from the same data.percentage
- * - Goal columns are filled from data.goalNames[] (includes custom goals)
+ * Phase 1 (LAUNCH_MISSION): Append row with S.no + goals only.
+ * Week and Completion % are left blank — filled on submit.
  */
-function logWeeklyGoals(ss, data) {
+function logGoalsOnLaunch(ss, data) {
   var sheet = ss.getSheetByName('Weekly Goals');
 
   if (!sheet) {
@@ -68,11 +79,33 @@ function logWeeklyGoals(ss, data) {
 
   var sno = sheet.getLastRow(); // header is row 1, so lastRow = serial number
 
-  var row = [sno, data.week || '', (data.percentage || 0) + '%'];
+  var row = [sno, '', '']; // Week and Completion % blank
   var goals = data.goalNames || [];
   for (var g = 0; g < 19; g++) {
     row.push(g < goals.length ? goals[g] : '');
   }
 
   sheet.appendRow(row);
+}
+
+/**
+ * Phase 2 (SUBMIT/AUTO_SUBMIT): Find the last row with empty Completion %,
+ * fill in Week and Completion %.
+ */
+function updateGoalsOnSubmit(ss, data) {
+  var sheet = ss.getSheetByName('Weekly Goals');
+  if (!sheet) return;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return; // no data rows
+
+  // Scan from bottom to find last row with empty Completion % (column 3)
+  for (var r = lastRow; r >= 2; r--) {
+    var cellValue = sheet.getRange(r, 3).getValue();
+    if (cellValue === '' || cellValue === null) {
+      sheet.getRange(r, 2).setValue(data.week || '');
+      sheet.getRange(r, 3).setValue((data.percentage || 0) + '%');
+      return;
+    }
+  }
 }
