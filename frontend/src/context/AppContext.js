@@ -197,13 +197,14 @@ function reducer(state, action) {
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
+      const goalNames = selectedQuestIds.map(id => lookup[id]?.quest.text).filter(Boolean);
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
-        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution) },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
       };
@@ -240,13 +241,14 @@ function reducer(state, action) {
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
+      const goalNames = selectedQuestIds.map(id => lookup[id]?.quest.text).filter(Boolean);
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
-        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution) },
+        _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         appView: 'planning',
@@ -461,7 +463,7 @@ export function AppProvider({ children }) {
   // ── 2b. Fire weekly log POST when a mission is submitted ────────────────────
   useEffect(() => {
     if (!state._pendingLog) return;
-    const { sprintStartDate, percentage, xpEarned, total, completed } = state._pendingLog;
+    const { sprintStartDate, percentage, xpEarned, total, completed, goalNames } = state._pendingLog;
     const week = formatWeekRange(sprintStartDate);
     logToGAS({
       week,
@@ -470,7 +472,7 @@ export function AppProvider({ children }) {
       totalQuests: total,
       completedQuests: completed,
     });
-    postToGAS({ action: 'update_goals', week, percentage });
+    postToGAS({ action: 'update_goals', week, percentage, goalNames: goalNames || [] });
     dispatch({ type: '_CLEAR_LOG' });
   }, [state._pendingLog]);
 

@@ -94,10 +94,18 @@ function logGoalsOnLaunch(ss, data) {
  */
 function updateGoalsOnSubmit(ss, data) {
   var sheet = ss.getSheetByName('Weekly Goals');
-  if (!sheet) return;
+
+  if (!sheet) {
+    sheet = ss.insertSheet('Weekly Goals');
+    var headers = ['S.no', 'Week', 'Completion %'];
+    for (var i = 1; i <= 19; i++) {
+      headers.push('Goal ' + i);
+    }
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  }
 
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return; // no data rows
 
   // Scan from bottom to find last row with empty Completion % (column 3)
   for (var r = lastRow; r >= 2; r--) {
@@ -108,4 +116,13 @@ function updateGoalsOnSubmit(ss, data) {
       return;
     }
   }
+
+  // Fallback: no launch row found (legacy sprint) — create full row
+  var sno = lastRow;
+  var row = [sno, data.week || '', (data.percentage || 0) + '%'];
+  var goals = data.goalNames || [];
+  for (var g = 0; g < 19; g++) {
+    row.push(g < goals.length ? goals[g] : '');
+  }
+  sheet.appendRow(row);
 }
