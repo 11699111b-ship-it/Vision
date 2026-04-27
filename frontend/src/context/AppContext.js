@@ -187,6 +187,9 @@ function reducer(state, action) {
     case '_CLEAR_TRACKER_LAUNCH':
       return { ...state, _pendingTrackerLaunch: null };
 
+    case '_CLEAR_TRACKER_SUBMIT':
+      return { ...state, _pendingTrackerSubmit: null };
+
     case 'SUBMIT_MISSION': {
       const { activeSprint } = state;
       const { selectedQuestIds, completedTodayIds, completedWeeklyIds, dailyCompletionHistory } = activeSprint;
@@ -208,6 +211,22 @@ function reducer(state, action) {
       const dailyContribution = avgDailyPct * dailyIds.length;
       const weeklyContribution = completedW;
       const percentage = Math.round(((dailyContribution + weeklyContribution) / total) * 100);
+      const trackerQuests = selectedQuestIds.map(id => {
+        const entry = lookup[id];
+        if (!entry) return null;
+        const isCustom = entry.goal.id.includes('custom');
+        const missionName = isCustom ? entry.room.name + '(custom goal)' : entry.goal.name;
+        let questPct;
+        if (entry.quest.frequency === 'Daily') {
+          const prevCount = (activeSprint.questDailyCompletionCounts || {})[id] || 0;
+          const todayDone = completedTodayIds.includes(id) ? 1 : 0;
+          const totalDays = allDailyScores.length;
+          questPct = totalDays > 0 ? Math.round(((prevCount + todayDone) / totalDays) * 100) : 0;
+        } else {
+          questPct = completedWeeklyIds.includes(id) ? 100 : 0;
+        }
+        return { mission: missionName, goal: entry.quest.text, percentage: questPct };
+      }).filter(Boolean);
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
@@ -219,8 +238,9 @@ function reducer(state, action) {
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
+        _pendingTrackerSubmit: { quests: trackerQuests },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
-        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
+        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
       };
     }
 
@@ -252,6 +272,22 @@ function reducer(state, action) {
       const dailyContribution = avgDailyPct * dailyIds.length;
       const weeklyContribution = completedW;
       const percentage = Math.round(((dailyContribution + weeklyContribution) / total) * 100);
+      const trackerQuests = selectedQuestIds.map(id => {
+        const entry = lookup[id];
+        if (!entry) return null;
+        const isCustom = entry.goal.id.includes('custom');
+        const missionName = isCustom ? entry.room.name + '(custom goal)' : entry.goal.name;
+        let questPct;
+        if (entry.quest.frequency === 'Daily') {
+          const prevCount = (activeSprint.questDailyCompletionCounts || {})[id] || 0;
+          const todayDone = completedTodayIds.includes(id) ? 1 : 0;
+          const totalDays = allDailyScores.length;
+          questPct = totalDays > 0 ? Math.round(((prevCount + todayDone) / totalDays) * 100) : 0;
+        } else {
+          questPct = completedWeeklyIds.includes(id) ? 100 : 0;
+        }
+        return { mission: missionName, goal: entry.quest.text, percentage: questPct };
+      }).filter(Boolean);
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
@@ -263,8 +299,9 @@ function reducer(state, action) {
         avgCompletion: newAvg,
         autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
+        _pendingTrackerSubmit: { quests: trackerQuests },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
-        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
+        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
         appView: 'planning',
       };
     }
@@ -468,7 +505,7 @@ export function AppProvider({ children }) {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
-    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, ...toSave } = state;
+    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, _pendingTrackerSubmit, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
 
     // localStorage — full state (immediate, offline resilient)
@@ -511,6 +548,13 @@ export function AppProvider({ children }) {
     postToGAS({ action: 'track_goals_launch', quests: state._pendingTrackerLaunch.quests });
     dispatch({ type: '_CLEAR_TRACKER_LAUNCH' });
   }, [state._pendingTrackerLaunch]);
+
+  // ── 2e. Update Goals Tracker with per-quest % on sprint submit ─────────────────
+  useEffect(() => {
+    if (!state._pendingTrackerSubmit) return;
+    postToGAS({ action: 'track_goals_submit', quests: state._pendingTrackerSubmit.quests });
+    dispatch({ type: '_CLEAR_TRACKER_SUBMIT' });
+  }, [state._pendingTrackerSubmit]);
 
   // ── 3. IST 3AM Daily Reset (checks every 60s, only resets Daily tasks) ──────
   useEffect(() => {
