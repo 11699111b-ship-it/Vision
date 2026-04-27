@@ -162,17 +162,30 @@ function reducer(state, action) {
         return { ...state, launchError: 'Select at least one quest to launch the mission!' };
       }
       const goalNames = activeSprint.selectedQuestIds.map(id => lookup[id]?.quest.text).filter(Boolean);
+      const trackerQuests = activeSprint.selectedQuestIds.map(id => {
+        const entry = lookup[id];
+        if (!entry) return null;
+        const isCustom = entry.goal.id.includes('custom');
+        return {
+          mission: isCustom ? entry.room.name + '(custom goal)' : entry.goal.name,
+          goal: entry.quest.text,
+        };
+      }).filter(Boolean);
       return {
         ...state,
         appView: 'tracking',
         launchError: null,
         activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() },
         _pendingGoalLog: { goalNames },
+        _pendingTrackerLaunch: { quests: trackerQuests },
       };
     }
 
     case '_CLEAR_GOAL_LOG':
       return { ...state, _pendingGoalLog: null };
+
+    case '_CLEAR_TRACKER_LAUNCH':
+      return { ...state, _pendingTrackerLaunch: null };
 
     case 'SUBMIT_MISSION': {
       const { activeSprint } = state;
@@ -455,7 +468,7 @@ export function AppProvider({ children }) {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
-    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, ...toSave } = state;
+    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
 
     // localStorage — full state (immediate, offline resilient)
@@ -491,6 +504,13 @@ export function AppProvider({ children }) {
     postToGAS({ action: 'log_goals', goalNames: goalNames || [] });
     dispatch({ type: '_CLEAR_GOAL_LOG' });
   }, [state._pendingGoalLog]);
+
+  // ── 2d. Log goals to "Goals Tracker" sheet on mission launch ───────────────
+  useEffect(() => {
+    if (!state._pendingTrackerLaunch) return;
+    postToGAS({ action: 'track_goals_launch', quests: state._pendingTrackerLaunch.quests });
+    dispatch({ type: '_CLEAR_TRACKER_LAUNCH' });
+  }, [state._pendingTrackerLaunch]);
 
   // ── 3. IST 3AM Daily Reset (checks every 60s, only resets Daily tasks) ──────
   useEffect(() => {
