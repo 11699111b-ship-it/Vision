@@ -35,6 +35,14 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Goals Tracker: update on sprint submit
+    if (data.action === 'track_goals_submit') {
+      trackGoalsOnSubmit(ss, data);
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: 'tracker_submit_updated' })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Phase 2b: Log to WeeklyLogs sheet on submit
     if (data.action === 'log') {
       var logSheet = ss.getSheetByName('WeeklyLogs');
@@ -175,6 +183,49 @@ function trackGoalsOnLaunch(ss, data) {
     if (!found) {
       sheet.appendRow([mission, goal, 1, '', '']);
       existingData.push([mission, goal, 1, '', '']);
+    }
+  }
+}
+
+/**
+ * Goals Tracker: On sprint submit, update Recent % and recalculate Average % for each quest.
+ * Payload: { action: 'track_goals_submit', quests: [{mission, goal, percentage}, ...] }
+ */
+function trackGoalsOnSubmit(ss, data) {
+  var sheet = ss.getSheetByName('Goals Tracker');
+  if (!sheet) return;
+
+  var quests = data.quests || [];
+  if (quests.length === 0) return;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var existingData = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+
+  for (var i = 0; i < quests.length; i++) {
+    var mission = quests[i].mission;
+    var goal = quests[i].goal;
+    var pct = quests[i].percentage || 0;
+
+    for (var r = 0; r < existingData.length; r++) {
+      if (existingData[r][0] === mission && existingData[r][1] === goal) {
+        var rowNum = r + 2;
+        var weeks = existingData[r][2] || 1;
+        var oldAvgStr = String(existingData[r][3]).replace('%', '');
+        var oldAvg = oldAvgStr === '' ? 0 : parseFloat(oldAvgStr) || 0;
+
+        var newAvg;
+        if (weeks <= 1) {
+          newAvg = pct;
+        } else {
+          newAvg = Math.round(((oldAvg * (weeks - 1)) + pct) / weeks);
+        }
+
+        sheet.getRange(rowNum, 4).setValue(newAvg + '%');
+        sheet.getRange(rowNum, 5).setValue(pct + '%');
+        break;
+      }
     }
   }
 }
