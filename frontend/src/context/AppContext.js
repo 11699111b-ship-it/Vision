@@ -71,6 +71,7 @@ const initialState = {
     sprintStartDate: null,
     yesterdayProgress: null,
     dailyCompletionHistory: [],
+    questDailyCompletionCounts: {},
   },
   avgCompletion: 0,
   sprintCount: 0,
@@ -305,6 +306,12 @@ function reducer(state, action) {
       const todayScore = dailyIds.length > 0 ? dailyDoneCount / dailyIds.length : 1;
       const updatedHistory = [...(activeSprint.dailyCompletionHistory || []), todayScore];
 
+      const updatedQuestCounts = { ...(activeSprint.questDailyCompletionCounts || {}) };
+      dailyIds.forEach(id => {
+        if (!updatedQuestCounts[id]) updatedQuestCounts[id] = 0;
+        if (completedTodayIds.includes(id)) updatedQuestCounts[id]++;
+      });
+
       let ns = streak, nb = buffers;
       if (yp >= 90) { ns = streak + 1; }
       else { if (nb > 0) { nb -= 1; } else { ns = 0; } }
@@ -322,7 +329,7 @@ function reducer(state, action) {
         lastResetDate: istDateStr,
         lastBufferResetMonth: cm,
         // completedTodayIds cleared (Daily only) — completedWeeklyIds + dailyCompletionHistory preserved
-        activeSprint: { ...activeSprint, completedTodayIds: [], yesterdayProgress: yp, dailyCompletionHistory: updatedHistory },
+        activeSprint: { ...activeSprint, completedTodayIds: [], yesterdayProgress: yp, dailyCompletionHistory: updatedHistory, questDailyCompletionCounts: updatedQuestCounts },
       };
     }
 
@@ -340,6 +347,7 @@ function reducer(state, action) {
           sprintStartDate: null,
           yesterdayProgress: null,
           dailyCompletionHistory: [],
+          questDailyCompletionCounts: {},
         },
       };
 
