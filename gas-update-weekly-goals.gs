@@ -27,6 +27,14 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Goals Tracker: update on mission launch
+    if (data.action === 'track_goals_launch') {
+      trackGoalsOnLaunch(ss, data);
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: 'tracker_launch_logged' })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Phase 2b: Log to WeeklyLogs sheet on submit
     if (data.action === 'log') {
       var logSheet = ss.getSheetByName('WeeklyLogs');
@@ -125,4 +133,48 @@ function updateGoalsOnSubmit(ss, data) {
     row.push(g < goals.length ? goals[g] : '');
   }
   sheet.appendRow(row);
+}
+
+/**
+ * Goals Tracker: On mission launch, add new quests or increment No of Weeks for existing ones.
+ * Payload: { action: 'track_goals_launch', quests: [{mission, goal}, ...] }
+ */
+function trackGoalsOnLaunch(ss, data) {
+  var sheet = ss.getSheetByName('Goals Tracker');
+
+  if (!sheet) {
+    sheet = ss.insertSheet('Goals Tracker');
+    sheet.appendRow(['Mission', 'Goal', 'No of Weeks', 'Average %', 'Recent %']);
+    sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  }
+
+  var quests = data.quests || [];
+  if (quests.length === 0) return;
+
+  var lastRow = sheet.getLastRow();
+  var existingData = lastRow >= 2
+    ? sheet.getRange(2, 1, lastRow - 1, 5).getValues()
+    : [];
+
+  for (var i = 0; i < quests.length; i++) {
+    var mission = quests[i].mission;
+    var goal = quests[i].goal;
+    var found = false;
+
+    for (var r = 0; r < existingData.length; r++) {
+      if (existingData[r][0] === mission && existingData[r][1] === goal) {
+        var rowNum = r + 2;
+        var currentWeeks = existingData[r][2] || 0;
+        sheet.getRange(rowNum, 3).setValue(currentWeeks + 1);
+        existingData[r][2] = currentWeeks + 1;
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      sheet.appendRow([mission, goal, 1, '', '']);
+      existingData.push([mission, goal, 1, '', '']);
+    }
+  }
 }
