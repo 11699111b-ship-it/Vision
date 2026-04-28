@@ -132,7 +132,7 @@ function GoalGroup({ goal, isLocked, activeSprint, onToggle }) {
 
 // ── Mobile-only receipt bar (shows inside CommandCenter on mobile) ─────────────
 function MobileReceiptBar() {
-  const { activeSprint, questLookup } = useAppContext();
+  const { activeSprint, questLookup, dispatch } = useAppContext();
   const { selectedQuestIds } = activeSprint;
   if (selectedQuestIds.length === 0) return null;
 
@@ -162,8 +162,19 @@ function MobileReceiptBar() {
               whiteSpace: 'nowrap', maxWidth: 160,
               overflow: 'hidden', textOverflow: 'ellipsis',
               fontFamily: 'system-ui, sans-serif',
+              display: 'flex', alignItems: 'center', gap: 4,
             }}>
               {text}
+              <button
+                onClick={() => dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId: id })}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'rgba(255,255,255,0.35)', fontSize: 13, padding: 0,
+                  lineHeight: 1, flexShrink: 0,
+                }}
+              >
+                ×
+              </button>
             </span>
           );
         })}

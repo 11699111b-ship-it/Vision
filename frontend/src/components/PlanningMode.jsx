@@ -82,7 +82,7 @@ function HeroTag() {
 }
 
 function SelectedTasksReceipt() {
-  const { activeSprint, questLookup } = useAppContext();
+  const { activeSprint, questLookup, dispatch } = useAppContext();
   const { selectedQuestIds } = activeSprint;
 
   if (selectedQuestIds.length === 0) return null;
@@ -94,7 +94,7 @@ function SelectedTasksReceipt() {
     if (!entry) continue;
     const { goal, quest } = entry;
     if (!goalMap.has(goal.id)) goalMap.set(goal.id, { name: goal.name, quests: [] });
-    goalMap.get(goal.id).quests.push(quest.text);
+    goalMap.get(goal.id).quests.push({ id: quest.id, text: quest.text });
   }
 
   return (
@@ -125,20 +125,37 @@ function SelectedTasksReceipt() {
               {name}
             </p>
             {/* Quest activities — text-xs text-gray-300 line-clamp-1 */}
-            {quests.map((text, i) => (
-              <p key={i} style={{
-                fontSize: 12,                               /* text-xs */
-                color: '#D1D5DB',                           /* text-gray-300 */
-                fontFamily: 'system-ui, sans-serif',
-                marginBottom: 2, lineHeight: 1.4,
-                paddingLeft: 6,
-                borderLeft: '2px solid rgba(57,255,20,0.3)',
-                overflow: 'hidden',                         /* line-clamp-1 */
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
+            {quests.map((q) => (
+              <div key={q.id} style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                marginBottom: 2,
               }}>
-                {text}
-              </p>
+                <p style={{
+                  fontSize: 12,                               /* text-xs */
+                  color: '#D1D5DB',                           /* text-gray-300 */
+                  fontFamily: 'system-ui, sans-serif',
+                  lineHeight: 1.4,
+                  paddingLeft: 6,
+                  borderLeft: '2px solid rgba(57,255,20,0.3)',
+                  overflow: 'hidden',                         /* line-clamp-1 */
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  flex: 1, margin: 0,
+                }}>
+                  {q.text}
+                </p>
+                <button
+                  onClick={() => dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId: q.id })}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.25)', fontSize: 14, padding: '0 2px',
+                    lineHeight: 1, flexShrink: 0,
+                  }}
+                  title="Remove quest"
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         ))}
