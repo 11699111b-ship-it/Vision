@@ -33,8 +33,8 @@ frontend/
 
     components/
       WelcomeScreen.jsx  # Entry screen — background image, scan-line animation, ENTER button
-      PlanningMode.jsx   # Split layout: Building (desktop left) + CommandCenter (right/full mobile). Top bar: HeroTag, EP, StreakBadge, MusicBtn
-      CommandCenter.jsx  # Quest selection UI — floor/room accordions, EP budget, loadouts, launch button, custom quest form
+      PlanningMode.jsx   # Split layout: Building (desktop left) + CommandCenter (right/full mobile). Top bar: HeroTag, EP, StreakBadge, MusicBtn. Desktop receipt has X buttons to unselect quests.
+      CommandCenter.jsx  # Quest selection UI — floor/room accordions, EP budget, loadouts, launch button, custom quest form. Mobile receipt bar with X buttons to unselect quests.
       TrackingMode.jsx   # Active sprint — progress ring, streak counter, daily/weekly task cards, submit button, confetti overlay. Top bar: StreakBadge, MusicBtn
       HQVisitMode.jsx    # Building inspection view + return button. Top bar: StreakBadge, MusicBtn
       Building.jsx       # Visual building facade — 6 floors of window panes that glow green when active
@@ -102,6 +102,7 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
     sprintStartDate: ISO,       // when LAUNCH MISSION was clicked
     yesterdayProgress: num,      // previous day's daily completion %
     dailyCompletionHistory: [], // array of daily scores (0-1 fraction) accumulated at each 3AM reset
+    questDailyCompletionCounts: {}, // per-quest daily tracking: { [questId]: daysCompleted }
   },
   avgCompletion: number,    // running average across all sprints
   sprintCount: number,
@@ -140,12 +141,15 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 | `State` | Cell A1 stores JSON blob of app state (for cross-device sync) |
 | `WeeklyLogs` | Append-only log: `[timestamp, weekRange, %, xpEarned, totalQuests, completedQuests]` |
 | `Weekly Goals` | Two-phase: `[S.no, weekRange, completion%, goal1..goal19]` — goals logged at launch, completion filled on submit |
+| `Goals Tracker` | Per-quest tracking: `[Mission, Goal, No of Weeks, Average %, Recent %]` — tracks individual quest history across sprints |
 
 ### Payloads
 - **State save**: `POST { xp, streak, buffers, activeSprint, _customGoals, ... }` (no `action` field)
 - **Sprint log**: `POST { action: 'log', week, percentage, xpEarned, totalQuests, completedQuests }`
 - **Goals log (launch)**: `POST { action: 'log_goals', goalNames[] }` — appends row with S.no + goals, Week and Completion % blank
 - **Goals update (submit)**: `POST { action: 'update_goals', week, percentage }` — fills Week and Completion % on the last blank row
+- **Tracker launch**: `POST { action: 'track_goals_launch', quests: [{mission, goal}] }` — adds new quests or increments No of Weeks for existing ones
+- **Tracker submit**: `POST { action: 'track_goals_submit', quests: [{mission, goal, percentage}] }` — updates Average % and Recent % per quest
 
 ## Sprint Lifecycle
 

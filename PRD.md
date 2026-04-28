@@ -81,8 +81,8 @@ Full-screen entry with background image, scan-line animation, title "SUPERHERO H
 
 ### Planning Mode (Desktop: Split | Mobile: Full)
 - **Top bar**: HQ title, HeroTag (level + XP), EP count, StreakBadge (flame + count), MusicBtn
-- **Left panel (desktop only)**: Building facade visualization. Floors glow green when they have active quests. Shows selected tasks receipt grouped by goal.
-- **Right panel (full on mobile)**: CommandCenter — smart loadouts, EP budget bar, floor > room > goal > quest accordion, custom quest form, LAUNCH MISSION button.
+- **Left panel (desktop only)**: Building facade visualization. Floors glow green when they have active quests. Shows selected tasks receipt grouped by goal with X buttons to unselect.
+- **Right panel (full on mobile)**: CommandCenter — smart loadouts, EP budget bar, floor > room > goal > quest accordion, custom quest form, LAUNCH MISSION button. Mobile receipt bar at bottom with X buttons to unselect quests.
 
 ### Tracking Mode
 - **Top bar**: VISIT HQ button, "ACTIVE PROTOCOL" title, StreakBadge, MusicBtn
@@ -111,6 +111,8 @@ Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change.
 - **POST (log)**: On sprint submit. Appends to "WeeklyLogs" sheet.
 - **POST (log_goals)**: On mission launch. Appends row to "Weekly Goals" sheet with S.no + goal names (Week and Completion % left blank).
 - **POST (update_goals)**: On sprint submit. Finds the last "Weekly Goals" row with empty Completion %, fills in Week dates and Completion %.
+- **POST (track_goals_launch)**: On mission launch. Adds new quest rows or increments No of Weeks for existing quests in "Goals Tracker" sheet.
+- **POST (track_goals_submit)**: On sprint submit. Updates per-quest Average % (running average as raw numbers) and Recent % in "Goals Tracker" sheet.
 
 ### Weekly Goals Sheet Format (Two-Phase Logging)
 | S.no | Week | Completion % | Goal 1 | Goal 2 | ... | Goal 19 |
@@ -119,6 +121,18 @@ Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change.
 
 - **Phase 1 (Launch)**: Row created with S.no and goal names. Week and Completion % are blank.
 - **Phase 2 (Submit)**: Week dates and Completion % filled in (same format as WeeklyLogs).
+
+### Goals Tracker Sheet Format (Per-Quest History)
+| Mission | Goal | No of Weeks | Average % | Recent % |
+|---------|------|-------------|-----------|----------|
+| Overall Body Mastery | 45-minute physical training | 3 | 78 | 100 |
+
+- **Mission**: Parent goal name (for hardcoded goals) or `RoomName(custom goal)` (for custom goals)
+- **Goal**: Individual quest text
+- **No of Weeks**: Incremented each time the quest is included in a sprint launch
+- **Average %**: Running average of per-quest completion across all sprints (stored as raw numbers, not strings)
+- **Recent %**: Latest sprint's per-quest completion %
+- **Per-quest % calculation**: Daily quests use `daysCompleted / totalDays * 100`. Weekly quests are binary (100% if done, 0% if not).
 
 ## Design System
 
@@ -135,7 +149,7 @@ Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change.
 
 1. **All time in IST**: Sprint deadlines, daily resets, and date formatting use IST regardless of user timezone. Hardcoded to Asia/Kolkata.
 2. **GAS over traditional backend**: No server to maintain. The FastAPI backend in `/backend` is scaffolding only — all real persistence goes through GAS.
-3. **Blueprint is code, not data**: The 6-floor goal hierarchy is hardcoded in `blueprint.js`. Only `customGoals` are user-mutable and persisted.
+3. **Blueprint is code, not data**: The 6-floor goal hierarchy is hardcoded in `blueprint.js`. Only `customGoals` are user-mutable and persisted. (Planned: migrate to sheet-based goals config where Google Sheet becomes the source of truth for all goals.)
 4. **EP budget at goal level**: Selecting any quest from a goal costs the goal's EP. Multiple quests from the same goal don't multiply the cost — they share it (since quest selection is per-quest but EP is per-goal-membership).
 5. **Daily vs Weekly tracking split**: `completedTodayIds` resets at IST 3AM. `completedWeeklyIds` persists until sprint submit. `dailyCompletionHistory` accumulates each day's daily score (0-1 fraction) for weekly average calculation. This enables daily streak tracking, fair weekly averaging, and allows weekly tasks to be checked off anytime.
 6. **Auto-submit safety net**: If the user forgets to submit before Sunday midnight IST, the system auto-submits with current progress and shows a toast on next visit.
