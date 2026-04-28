@@ -212,8 +212,8 @@ function trackGoalsOnSubmit(ss, data) {
       if (existingData[r][0] === mission && existingData[r][1] === goal) {
         var rowNum = r + 2;
         var weeks = existingData[r][2] || 1;
-        var oldAvgStr = String(existingData[r][3]).replace('%', '');
-        var oldAvg = oldAvgStr === '' ? 0 : parseFloat(oldAvgStr) || 0;
+        var rawAvg = existingData[r][3];
+        var oldAvg = (rawAvg === '' || rawAvg === null) ? 0 : (typeof rawAvg === 'number' ? rawAvg : parseFloat(String(rawAvg).replace('%', '')) || 0);
 
         var newAvg;
         if (weeks <= 1) {
@@ -222,8 +222,8 @@ function trackGoalsOnSubmit(ss, data) {
           newAvg = Math.round(((oldAvg * (weeks - 1)) + pct) / weeks);
         }
 
-        sheet.getRange(rowNum, 4).setValue(newAvg + '%');
-        sheet.getRange(rowNum, 5).setValue(pct + '%');
+        sheet.getRange(rowNum, 4).setValue(newAvg);
+        sheet.getRange(rowNum, 5).setValue(pct);
         break;
       }
     }
