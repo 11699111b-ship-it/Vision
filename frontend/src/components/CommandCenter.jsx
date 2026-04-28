@@ -158,15 +158,19 @@ function MobileReceiptBar() {
               flexShrink: 0, fontSize: 11, color: '#D1D5DB',
               background: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(57,255,20,0.2)',
-              borderRadius: 4, padding: '3px 8px',
+              borderRadius: 4, padding: '3px 6px 3px 8px',
               whiteSpace: 'nowrap', maxWidth: 160,
-              overflow: 'hidden', textOverflow: 'ellipsis',
               fontFamily: 'system-ui, sans-serif',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
-              {text}
+              <span style={{
+                overflow: 'hidden', textOverflow: 'ellipsis',
+                minWidth: 0,
+              }}>
+                {text}
+              </span>
               <button
-                onClick={() => dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId: id })}
+                onClick={(e) => { e.stopPropagation(); dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId: id }); }}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
                   color: 'rgba(255,255,255,0.35)', fontSize: 13, padding: 0,

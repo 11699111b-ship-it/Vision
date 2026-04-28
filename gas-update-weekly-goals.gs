@@ -222,8 +222,8 @@ function trackGoalsOnSubmit(ss, data) {
           newAvg = Math.round(((oldAvg * (weeks - 1)) + pct) / weeks);
         }
 
-        sheet.getRange(rowNum, 4).setValue(newAvg);
-        sheet.getRange(rowNum, 5).setValue(pct);
+        sheet.getRange(rowNum, 4).setNumberFormat('0').setValue(newAvg);
+        sheet.getRange(rowNum, 5).setNumberFormat('0').setValue(pct);
         break;
       }
     }
