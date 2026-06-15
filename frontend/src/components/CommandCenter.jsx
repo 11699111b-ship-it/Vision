@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Plus, X, Rocket, AlertTriangle, Check, Zap, 
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import { FOUNDER_GRIND, RECOVERY_WEEK } from '../data/loadouts';
+import FocusModePanel from './FocusModePanel';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
@@ -397,6 +398,43 @@ function FloorSection({ floor }) {
   );
 }
 
+// ── All Floors — collapsible wrapper ──────────────────────────────────────────
+function AllFloorsSection({ floors }) {
+  const [open, setOpen] = useState(true);
+  const ChevronIcon = open ? ChevronDown : ChevronRight;
+
+  return (
+    <div>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '11px 16px',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <ChevronIcon size={10} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
+        <span style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 11, fontWeight: 700,
+          color: 'rgba(255,255,255,0.35)', letterSpacing: '0.14em', flex: 1,
+        }}>
+          ALL FLOORS
+        </span>
+        <span style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 10,
+          color: 'rgba(255,255,255,0.18)',
+        }}>
+          {floors.length} FLOORS
+        </span>
+      </div>
+      {open && floors.map(floor => (
+        <FloorSection key={floor.id} floor={floor} />
+      ))}
+    </div>
+  );
+}
+
 // ── Smart Loadouts panel ───────────────────────────────────────────────────────
 function LoadoutsPanel() {
   const { dispatch, lastSprintQuestIds } = useAppContext();
@@ -478,10 +516,7 @@ export default function CommandCenter() {
   return (
     <div data-testid="command-center" className="flex flex-col h-full">
 
-      {/* Smart Loadouts */}
-      <LoadoutsPanel />
-
-      {/* EP budget strip + Reset button */}
+      {/* 1. EP budget strip — FIRST */}
       <div
         data-testid="ep-budget-display"
         className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0"
@@ -503,8 +538,6 @@ export default function CommandCenter() {
         <span style={{ fontSize: 11, color: '#444', fontFamily: 'Space Mono, monospace', flexShrink: 0 }}>
           {activeSprint.selectedQuestIds.length}
         </span>
-
-        {/* Reset Sprint button */}
         <motion.button
           data-testid="reset-sprint-btn"
           onClick={() => { if (hasSelection) { boop(); dispatch({ type: 'RESET_SPRINT' }); } }}
@@ -512,14 +545,10 @@ export default function CommandCenter() {
           style={{
             background: 'transparent',
             border: `1px solid ${hasSelection ? 'rgba(255,59,48,0.3)' : 'rgba(255,255,255,0.06)'}`,
-            borderRadius: 6,
-            padding: '3px 8px',
+            borderRadius: 6, padding: '3px 8px',
             cursor: hasSelection ? 'pointer' : 'not-allowed',
             opacity: hasSelection ? 1 : 0.35,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
           }}
           whileHover={hasSelection ? { background: 'rgba(255,59,48,0.1)', borderColor: 'rgba(255,59,48,0.6)' } : {}}
           whileTap={hasSelection ? { scale: 0.94 } : {}}
@@ -531,14 +560,16 @@ export default function CommandCenter() {
         </motion.button>
       </div>
 
-      {/* Blueprint — all floors collapsed by default */}
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-        {/* Mobile receipt bar (replaces building panel on small screens) */}
-        <MobileReceiptBar />
+      {/* 2. Smart Loadouts — SECOND */}
+      <LoadoutsPanel />
 
-        {blueprint.floors.map(floor => (
-          <FloorSection key={floor.id} floor={floor} />
-        ))}
+      {/* 3. Focus Mode — THIRD */}
+      <FocusModePanel />
+
+      {/* 4. Blueprint — scrollable, All Floors collapsible */}
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+        <MobileReceiptBar />
+        <AllFloorsSection floors={blueprint.floors} />
         <div style={{ height: 20 }} />
       </div>
 
