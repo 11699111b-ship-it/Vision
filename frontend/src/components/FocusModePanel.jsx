@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, Check, Plus } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import QuestMapperOverlay from './QuestMapperOverlay';
+import usePersistentCollapse from '../hooks/usePersistentCollapse';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
@@ -294,7 +295,7 @@ function FocusCard({ focus, onMap }) {
 // ── Main panel ─────────────────────────────────────────────────────────────────
 export default function FocusModePanel() {
   const { focusItems } = useAppContext();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = usePersistentCollapse('focus', true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [mappingFocusId, setMappingFocusId] = useState(null);
 

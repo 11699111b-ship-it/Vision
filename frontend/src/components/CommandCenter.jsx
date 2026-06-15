@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import { FOUNDER_GRIND, RECOVERY_WEEK } from '../data/loadouts';
 import FocusModePanel from './FocusModePanel';
+import usePersistentCollapse from '../hooks/usePersistentCollapse';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
@@ -401,7 +402,7 @@ function FloorSection({ floor }) {
 
 // ── All Floors — collapsible wrapper ──────────────────────────────────────────
 function AllFloorsSection({ floors }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = usePersistentCollapse('floors', true);
   const ChevronIcon = open ? ChevronDown : ChevronRight;
 
   return (
@@ -439,6 +440,8 @@ function AllFloorsSection({ floors }) {
 // ── Smart Loadouts panel ───────────────────────────────────────────────────────
 function LoadoutsPanel() {
   const { dispatch, lastSprintQuestIds } = useAppContext();
+  const [open, setOpen] = usePersistentCollapse('loadouts', true);
+  const ChevronIcon = open ? ChevronDown : ChevronRight;
   const hasLastWeek = lastSprintQuestIds && lastSprintQuestIds.length > 0;
 
   const handleLoad = (questIds) => {
@@ -461,14 +464,22 @@ function LoadoutsPanel() {
   });
 
   return (
-    <div style={{ padding: '12px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center gap-2 mb-3">
+    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '11px 16px', cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <ChevronIcon size={10} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
         <Zap size={11} color="rgba(255,255,255,0.25)" />
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em' }}>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em', flex: 1 }}>
           SMART LOADOUTS
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {open && (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '0 16px 14px' }}>
         <motion.button
           data-testid="loadout-founder-btn"
           style={pillBtn('#39FF14')}
@@ -503,6 +514,7 @@ function LoadoutsPanel() {
           REPEAT LAST WEEK
         </motion.button>
       </div>
+      )}
     </div>
   );
 }
