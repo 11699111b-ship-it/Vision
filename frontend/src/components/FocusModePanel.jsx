@@ -160,7 +160,7 @@ function FocusQuestRow({ text, frequency, isSelected, onToggle, onDelete }) {
       {onDelete && (
         <button
           onClick={e => { e.stopPropagation(); boop(); onDelete(); }}
-          title="Delete custom quest"
+          title="Remove from focus"
           style={{
             background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.2)',
             fontSize: 13, lineHeight: 1, padding: '1px 3px', flexShrink: 0,
@@ -188,6 +188,15 @@ function FocusCard({ focus, onMap }) {
   const isActive = selectedCount > 0;
 
   const toggle = (questId) => { boop(); dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId }); };
+
+  // Unlink a mapped (blueprint) quest from this focus. If it's currently in the
+  // sprint, deselect it too so EP frees up — matching custom-quest delete.
+  const unlinkMapped = (questId) => {
+    if (activeSprint.selectedQuestIds.includes(questId)) {
+      dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId });
+    }
+    dispatch({ type: 'TOGGLE_QUEST_IN_FOCUS', focusId: focus.id, questId });
+  };
 
   return (
     <div style={{
@@ -234,6 +243,7 @@ function FocusCard({ focus, onMap }) {
               frequency={entry.quest.frequency}
               isSelected={activeSprint.selectedQuestIds.includes(entry.quest.id)}
               onToggle={() => toggle(entry.quest.id)}
+              onDelete={() => unlinkMapped(entry.quest.id)}
             />
           ))}
           {customQuests.map(cq => (
