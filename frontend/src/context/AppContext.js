@@ -79,9 +79,10 @@ const initialState = {
   submissionResult: null,
   lastSprintQuestIds: [],
   autoSubmittedMessage: null,
+  focusItems: [],
 };
 
-function reducer(state, action) {
+export function reducer(state, action) {
   const lookup = buildQuestLookup(state.blueprint);
 
   switch (action.type) {
@@ -123,6 +124,7 @@ function reducer(state, action) {
         avgCompletion: p.avgCompletion ?? 0,
         sprintCount: p.sprintCount ?? 0,
         lastSprintQuestIds: p.lastSprintQuestIds ?? [],
+        focusItems: p.focusItems ?? [],
       };
     }
 
@@ -428,6 +430,61 @@ function reducer(state, action) {
         ...state,
         launchError: null,
         activeSprint: { ...state.activeSprint, selectedQuestIds: fittingIds },
+      };
+    }
+
+    case 'ADD_FOCUS': {
+      const newFocus = {
+        id: 'focus-' + Date.now(),
+        name: action.name.trim().toUpperCase(),
+        linkedQuestIds: [],
+      };
+      return { ...state, focusItems: [...state.focusItems, newFocus] };
+    }
+
+    case 'DELETE_FOCUS': {
+      return {
+        ...state,
+        focusItems: state.focusItems.filter(f => f.id !== action.focusId),
+      };
+    }
+
+    case 'TOGGLE_QUEST_IN_FOCUS': {
+      return {
+        ...state,
+        focusItems: state.focusItems.map(f => {
+          if (f.id !== action.focusId) return f;
+          const already = f.linkedQuestIds.includes(action.questId);
+          return {
+            ...f,
+            linkedQuestIds: already
+              ? f.linkedQuestIds.filter(id => id !== action.questId)
+              : [...f.linkedQuestIds, action.questId],
+          };
+        }),
+      };
+    }
+
+    case 'ADD_FOCUS_TO_SPRINT': {
+      const focus = state.focusItems.find(f => f.id === action.focusId);
+      if (!focus) return state;
+      const currentIds = state.activeSprint.selectedQuestIds;
+      let runningEP = calcTotalEP(lookup, currentIds);
+      const newIds = [...currentIds];
+      for (const questId of focus.linkedQuestIds) {
+        if (newIds.includes(questId)) continue;
+        const entry = lookup[questId];
+        if (!entry || entry.room.locked || entry.goal.tag === 'Locked') continue;
+        const ep = entry.goal.epCost || 0;
+        if (runningEP + ep <= MAX_EP) {
+          newIds.push(questId);
+          runningEP += ep;
+        }
+      }
+      return {
+        ...state,
+        launchError: null,
+        activeSprint: { ...state.activeSprint, selectedQuestIds: newIds },
       };
     }
 
