@@ -97,6 +97,7 @@ const initialState = {
   lastSprintQuestIds: [],
   autoSubmittedMessage: null,
   focusItems: [],
+  lastSavedAt: null,
 };
 
 export function reducer(state, action) {
@@ -142,6 +143,7 @@ export function reducer(state, action) {
         sprintCount: p.sprintCount ?? 0,
         lastSprintQuestIds: p.lastSprintQuestIds ?? [],
         focusItems: p.focusItems ?? [],
+        lastSavedAt: p.lastSavedAt ?? null,
       };
     }
 
@@ -583,18 +585,22 @@ export function AppProvider({ children }) {
   // ── 1. Load state: localStorage first (instant), GAS fallback (cross-device) ─
   useEffect(() => {
     const load = async () => {
-      // 1a. Try localStorage (always up-to-date on same device)
+      let localTimestamp = 0;
+
+      // 1a. Load localStorage immediately (fast, offline-resilient)
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         const hasEntered = localStorage.getItem('hq_entered');
         if (raw && hasEntered) {
-          dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
+          const parsed = JSON.parse(raw);
+          localTimestamp = parsed.lastSavedAt || 0;
+          dispatch({ type: 'LOAD_STATE', payload: parsed });
           setIsLoading(false);
-          return;
+          // Don't return — still check GAS for newer state from another device
         }
       } catch { /* ignore */ }
 
-      // 1b. No local data — try GAS (new device / fresh browser)
+      // 1b. Fetch GAS — use if no local data, or GAS was saved more recently
       try {
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 8000);
@@ -602,7 +608,10 @@ export function AppProvider({ children }) {
         clearTimeout(tid);
         const data = await res.json();
         if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
-          dispatch({ type: 'LOAD_STATE', payload: data });
+          const gasTimestamp = data.lastSavedAt || 0;
+          if (gasTimestamp > localTimestamp) {
+            dispatch({ type: 'LOAD_STATE', payload: data });
+          }
         }
       } catch { /* ignore */ }
 
@@ -618,6 +627,7 @@ export function AppProvider({ children }) {
 
     const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, _pendingTrackerSubmit, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
+    toSave.lastSavedAt = Date.now();
 
     // localStorage — full state (immediate, offline resilient)
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave)); } catch { /* ignore */ }

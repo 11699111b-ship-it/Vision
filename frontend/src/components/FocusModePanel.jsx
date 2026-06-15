@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown, Check, Plus } from 'lucide-react';
+import usePersistentCollapse from '../hooks/usePersistentCollapse';
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import QuestMapperOverlay from './QuestMapperOverlay';
-import usePersistentCollapse from '../hooks/usePersistentCollapse';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
@@ -178,6 +178,7 @@ function FocusQuestRow({ text, frequency, isSelected, onToggle, onDelete }) {
 function FocusCard({ focus, onMap }) {
   const { dispatch, questLookup, activeSprint } = useAppContext();
   const [showCustomForm, setShowCustomForm] = useState(false);
+  const [open, setOpen] = usePersistentCollapse(`focus-card-${focus.id}`, true);
 
   const linked = focus.linkedQuestIds.map(id => questLookup[id]).filter(Boolean);
   const customQuests = focus.customQuests || [];
@@ -187,6 +188,8 @@ function FocusCard({ focus, onMap }) {
   const allIds = [...focus.linkedQuestIds, ...customQuests.map(q => q.id)];
   const selectedCount = allIds.filter(id => activeSprint.selectedQuestIds.includes(id)).length;
   const isActive = selectedCount > 0;
+
+  const ChevronIcon = open ? ChevronDown : ChevronRight;
 
   const toggle = (questId) => { boop(); dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId }); };
 
@@ -203,11 +206,18 @@ function FocusCard({ focus, onMap }) {
     <div style={{
       background: isActive ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.01)',
       border: `1px solid ${isActive ? 'rgba(57,255,20,0.28)' : 'rgba(255,255,255,0.08)'}`,
-      borderRadius: 8, padding: '10px 12px', marginBottom: 8,
+      borderRadius: 8, marginBottom: 8,
       opacity: isActive ? 1 : 0.72, transition: 'opacity 0.15s, border-color 0.15s',
     }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: hasQuests ? 6 : 8 }}>
+      {/* Header — always visible, tappable to collapse */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 12px', cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <ChevronIcon size={10} color={isActive ? 'rgba(57,255,20,0.6)' : 'rgba(255,255,255,0.2)'} style={{ flexShrink: 0 }} />
         <span style={{
           fontFamily: 'Space Mono, monospace', fontSize: 12.5, fontWeight: 700,
           color: isActive ? '#39FF14' : 'rgba(57,255,20,0.5)', letterSpacing: '0.05em', flex: 1,
@@ -218,10 +228,10 @@ function FocusCard({ focus, onMap }) {
           fontFamily: 'Space Mono, monospace', fontSize: 9,
           color: hasQuests ? 'rgba(255,255,255,0.3)' : 'rgba(255,165,0,0.55)',
         }}>
-          {hasQuests ? `${selectedCount} of ${total} selected` : 'no quests yet'}
+          {hasQuests ? `${selectedCount}/${total}` : 'no quests'}
         </span>
         <button
-          onClick={() => { boop(); dispatch({ type: 'DELETE_FOCUS', focusId: focus.id }); }}
+          onClick={e => { e.stopPropagation(); boop(); dispatch({ type: 'DELETE_FOCUS', focusId: focus.id }); }}
           title="Delete focus"
           style={{
             background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.18)',
@@ -234,59 +244,64 @@ function FocusCard({ focus, onMap }) {
         </button>
       </div>
 
-      {/* Checklist */}
-      {hasQuests && (
-        <div>
-          {linked.map(entry => (
-            <FocusQuestRow
-              key={entry.quest.id}
-              text={entry.quest.text}
-              frequency={entry.quest.frequency}
-              isSelected={activeSprint.selectedQuestIds.includes(entry.quest.id)}
-              onToggle={() => toggle(entry.quest.id)}
-              onDelete={() => unlinkMapped(entry.quest.id)}
-            />
-          ))}
-          {customQuests.map(cq => (
-            <FocusQuestRow
-              key={cq.id}
-              text={cq.text}
-              frequency={cq.frequency}
-              isSelected={activeSprint.selectedQuestIds.includes(cq.id)}
-              onToggle={() => toggle(cq.id)}
-              onDelete={() => dispatch({ type: 'DELETE_FOCUS_CUSTOM_QUEST', focusId: focus.id, questId: cq.id })}
-            />
-          ))}
+      {/* Body — collapsible */}
+      {open && (
+        <div style={{ padding: '0 12px 10px' }}>
+          {/* Checklist */}
+          {hasQuests && (
+            <div>
+              {linked.map(entry => (
+                <FocusQuestRow
+                  key={entry.quest.id}
+                  text={entry.quest.text}
+                  frequency={entry.quest.frequency}
+                  isSelected={activeSprint.selectedQuestIds.includes(entry.quest.id)}
+                  onToggle={() => toggle(entry.quest.id)}
+                  onDelete={() => unlinkMapped(entry.quest.id)}
+                />
+              ))}
+              {customQuests.map(cq => (
+                <FocusQuestRow
+                  key={cq.id}
+                  text={cq.text}
+                  frequency={cq.frequency}
+                  isSelected={activeSprint.selectedQuestIds.includes(cq.id)}
+                  onToggle={() => toggle(cq.id)}
+                  onDelete={() => dispatch({ type: 'DELETE_FOCUS_CUSTOM_QUEST', focusId: focus.id, questId: cq.id })}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Footer actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: hasQuests ? 8 : 0 }}>
+            <button
+              onClick={() => onMap(focus.id)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: 'Space Mono, monospace', fontSize: 10,
+                color: hasQuests ? 'rgba(0,229,255,0.6)' : 'rgba(255,165,0,0.7)', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}
+            >
+              {hasQuests ? 'map quests' : '+ map quests'}
+            </button>
+            <button
+              onClick={() => { setShowCustomForm(v => !v); boop(); }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(57,255,20,0.6)', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}
+            >
+              <Plus size={10} /> add custom
+            </button>
+          </div>
+
+          {showCustomForm && (
+            <AddCustomQuestForm focusId={focus.id} onClose={() => setShowCustomForm(false)} />
+          )}
         </div>
-      )}
-
-      {/* Footer actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: hasQuests ? 8 : 0 }}>
-        <button
-          onClick={() => onMap(focus.id)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: 'Space Mono, monospace', fontSize: 10,
-            color: hasQuests ? 'rgba(0,229,255,0.6)' : 'rgba(255,165,0,0.7)', padding: 0,
-            display: 'flex', alignItems: 'center', gap: 3,
-          }}
-        >
-          {hasQuests ? 'map quests' : '+ map quests'}
-        </button>
-        <button
-          onClick={() => { setShowCustomForm(v => !v); boop(); }}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(57,255,20,0.6)', padding: 0,
-            display: 'flex', alignItems: 'center', gap: 3,
-          }}
-        >
-          <Plus size={10} /> add custom
-        </button>
-      </div>
-
-      {showCustomForm && (
-        <AddCustomQuestForm focusId={focus.id} onClose={() => setShowCustomForm(false)} />
       )}
     </div>
   );

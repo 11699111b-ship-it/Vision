@@ -607,11 +607,9 @@ export default function CommandCenter() {
       {/* 4. Smart Loadouts */}
       <LoadoutsPanel />
 
-      {/* 5. Focus Mode */}
-      <FocusModePanel />
-
-      {/* 6. Blueprint — scrollable, All Floors collapsible */}
+      {/* 5+6. Scrollable area: Focus Mode + Blueprint */}
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+        <FocusModePanel />
         <AllFloorsSection floors={blueprint.floors} filterQuery={filterQuery} />
         <div style={{ height: 20 }} />
       </div>

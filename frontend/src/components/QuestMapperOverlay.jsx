@@ -18,7 +18,7 @@ function MapperQuestRow({ quest, isLinked, focusId, isLast }) {
       onClick={handleToggle}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 20px',
+        padding: '14px 20px', minHeight: 44,
         borderBottom: !isLast ? '1px solid rgba(255,255,255,0.05)' : 'none',
         background: isLinked ? 'rgba(57,255,20,0.04)' : 'transparent',
         cursor: 'pointer', transition: 'background 0.15s',
@@ -99,7 +99,7 @@ function MapperRoomSection({ room, focusId, linkedQuestIds, forceOpen }) {
       <button
         onClick={() => { if (!forceOpen) setOpen(o => !o); }}
         className="w-full flex items-center gap-2 text-left"
-        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '9px 16px' }}
+        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '13px 16px', minHeight: 44 }}
       >
         <span style={{
           fontSize: 12, fontWeight: 600, flex: 1,
@@ -145,7 +145,7 @@ function MapperFloorSection({ floor, focusId, linkedQuestIds, forceOpen }) {
       <button
         onClick={() => { if (!forceOpen) setOpen(o => !o); }}
         className="w-full flex items-center gap-3 text-left"
-        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '13px 16px' }}
+        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '13px 16px', minHeight: 44 }}
       >
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em', flexShrink: 0 }}>
           F{floor.number}
@@ -188,6 +188,8 @@ export default function QuestMapperOverlay({ focusId, onClose }) {
       background: '#0d0d0d',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       {/* Header */}
       <div style={{
@@ -202,7 +204,7 @@ export default function QuestMapperOverlay({ focusId, onClose }) {
             background: 'none', border: 'none', cursor: 'pointer',
             fontFamily: 'Space Mono, monospace', fontSize: 11,
             color: 'rgba(255,255,255,0.45)', display: 'flex', alignItems: 'center', gap: 4,
-            padding: 0,
+            padding: '10px 12px 10px 0', minHeight: 44,
           }}
         >
           ← DONE
