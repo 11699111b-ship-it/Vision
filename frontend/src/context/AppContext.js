@@ -282,7 +282,7 @@ export function reducer(state, action) {
         return {
           ...state,
           appView: 'planning',
-          autoSubmittedMessage: 'Boss Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
+          autoSubmittedMessage: 'Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
           activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         };
       }
@@ -326,7 +326,7 @@ export function reducer(state, action) {
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
-        autoSubmittedMessage: `Boss Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
+        autoSubmittedMessage: `Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,

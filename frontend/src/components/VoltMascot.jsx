@@ -6,17 +6,17 @@ import { useAppContext } from '../context/AppContext';
 function getVoltData(appView, floor01EP, upkeepMin, selectedCount) {
   if (appView === 'planning') {
     return {
-      text: `Good morning, Boss Anurag! Allocate your 20 EP and build your week.`,
+      text: `Good morning, Anurag! Allocate your 20 EP and build your week.`,
       urgent: false,
     };
   }
   if (appView === 'tracking') {
-    return { text: `Stay frosty, Boss Anurag. Let's close these rings.`, urgent: false };
+    return { text: `Stay frosty, Anurag. Let's close these rings.`, urgent: false };
   }
   if (appView === 'hq-visit') {
-    return { text: `Looking good, Boss Anurag. Base integrity is holding.`, urgent: false };
+    return { text: `Looking good, Anurag. Base integrity is holding.`, urgent: false };
   }
-  return { text: `Welcome to Superhero HQ, Boss Anurag. Ready to build?`, urgent: false };
+  return { text: `Welcome to Superhero HQ, Anurag. Ready to build?`, urgent: false };
 }
 
 export default function VoltMascot() {

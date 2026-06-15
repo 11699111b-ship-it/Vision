@@ -122,7 +122,7 @@ export default function HQVisitMode() {
           BASE INSPECTION
         </h2>
         <p className="text-center mb-8" style={{ fontSize: 10, color: '#8B8B8D', fontFamily: 'Space Mono, monospace', lineHeight: 1.7 }}>
-          Your base is holding, Boss Anurag.<br />
+          Your base is holding, Anurag.<br />
           The mission continues.
         </p>
 

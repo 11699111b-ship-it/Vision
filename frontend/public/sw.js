@@ -1,9 +1,7 @@
 // Superhero HQ — Service Worker
-// Offline caching + 3AM daily-reset local notification
+// Offline caching + IST-accurate local notifications
 
 const CACHE = 'superhero-hq-v2';
-
-// Resolve base path from SW scope (works under subpath like /Vision/)
 const BASE = new URL('.', self.location).pathname;
 
 const APP_SHELL = [
@@ -11,7 +9,7 @@ const APP_SHELL = [
   `${BASE}index.html`,
 ];
 
-// ── Install: cache app shell ─────────────────────────────────────────────────
+// ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
@@ -20,7 +18,7 @@ self.addEventListener('install', e => {
   );
 });
 
-// ── Activate: clean old caches + claim clients ───────────────────────────────
+// ── Activate ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     Promise.all([
@@ -28,11 +26,11 @@ self.addEventListener('activate', e => {
         Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
       ),
       self.clients.claim(),
-    ]).then(() => scheduleDailyReset())
+    ]).then(() => scheduleAll())
   );
 });
 
-// ── Fetch: stale-while-revalidate (serves offline too) ──────────────────────
+// ── Fetch: stale-while-revalidate ────────────────────────────────────────────
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (!e.request.url.startsWith('http')) return;
@@ -46,32 +44,28 @@ self.addEventListener('fetch', e => {
         }
         return res;
       }).catch(() => null);
-
       return cached || networkFetch || caches.match(`${BASE}index.html`);
     })
   );
 });
 
-// ── Push notification handler (for future server push) ──────────────────────
+// ── Push (server-push fallback) ───────────────────────────────────────────────
 self.addEventListener('push', e => {
   const data = e.data?.json?.() ?? {};
   e.waitUntil(
-    self.registration.showNotification(
-      data.title || 'Superhero HQ — Daily Reset',
-      {
-        body: data.body || 'New day begins. Quests reset. Level up, Boss Anurag.',
-        icon: `${BASE}icon-192.png`,
-        badge: `${BASE}icon-192.png`,
-        vibrate: [200, 100, 200],
-        tag: 'daily-reset',
-        renotify: true,
-        data: { url: '/' },
-      }
-    )
+    self.registration.showNotification(data.title || 'Superhero HQ', {
+      body: data.body || 'Your quests await.',
+      icon: `${BASE}icon-192.png`,
+      badge: `${BASE}icon-192.png`,
+      vibrate: [200, 100, 200],
+      tag: data.tag || 'hq-push',
+      renotify: true,
+      data: { url: '/' },
+    })
   );
 });
 
-// ── Notification click: open the app ────────────────────────────────────────
+// ── Notification click: open app ─────────────────────────────────────────────
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
@@ -83,39 +77,105 @@ self.addEventListener('notificationclick', e => {
   );
 });
 
-// ── Message handler from main thread ────────────────────────────────────────
+// ── Message handler ───────────────────────────────────────────────────────────
 self.addEventListener('message', e => {
-  if (e.data?.type === 'SCHEDULE_DAILY_RESET') scheduleDailyReset();
+  if (e.data?.type === 'SCHEDULE_DAILY_RESET') scheduleAll();
 });
 
-// ── Local 3AM notification scheduler ────────────────────────────────────────
-// Works when service worker is alive (device awake, iOS PWA installed on home screen).
-let resetTimerId = null;
+// ── IST helpers ───────────────────────────────────────────────────────────────
+// IST = UTC + 5:30. We work entirely in UTC so device timezone is irrelevant.
+// Adding IST_OFFSET to Date.now() and using getUTC* methods gives IST values.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-function scheduleDailyReset() {
-  if (resetTimerId) clearTimeout(resetTimerId);
+function istNow() {
+  return new Date(Date.now() + IST_OFFSET_MS);
+}
 
-  const now = new Date();
-  const next3AM = new Date();
-  next3AM.setHours(3, 0, 0, 0);
-  if (now >= next3AM) next3AM.setDate(next3AM.getDate() + 1);
+// ms until next occurrence of istHour:istMinute IST (daily)
+function msUntilDailyIST(istHour, istMinute) {
+  const now = istNow();
+  const curMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const tgtMin = istHour * 60 + istMinute;
+  let diffMin = tgtMin - curMin;
+  if (diffMin <= 0) diffMin += 24 * 60;
+  return diffMin * 60 * 1000 - now.getUTCSeconds() * 1000 - now.getUTCMilliseconds();
+}
 
-  const ms = next3AM - now;
+// ms until next occurrence of istHour:istMinute on a specific weekday (0=Sun)
+function msUntilWeeklyIST(dayOfWeek, istHour, istMinute) {
+  const now = istNow();
+  const curDay = now.getUTCDay();
+  const curMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const tgtMin = istHour * 60 + istMinute;
+  let daysUntil = (dayOfWeek - curDay + 7) % 7;
+  if (daysUntil === 0 && curMin >= tgtMin) daysUntil = 7;
+  const diffMin = daysUntil * 24 * 60 + (tgtMin - curMin);
+  return diffMin * 60 * 1000 - now.getUTCSeconds() * 1000 - now.getUTCMilliseconds();
+}
 
-  resetTimerId = setTimeout(() => {
-    // Only show if permission granted
-    if (self.Notification && self.Notification.permission === 'granted') {
-      self.registration.showNotification('Superhero HQ — New Day', {
-        body: 'Daily quests reset. Start strong, Boss Anurag.',
-        icon: `${BASE}icon-192.png`,
-        badge: `${BASE}icon-192.png`,
-        tag: 'daily-reset',
-        renotify: true,
-        vibrate: [150, 50, 150],
-        data: { url: '/' },
-      });
-    }
-    resetTimerId = null;
-    scheduleDailyReset(); // reschedule for next day
+function canNotify() {
+  return self.Notification && self.Notification.permission === 'granted';
+}
+
+function showNotification(title, body, tag) {
+  if (!canNotify()) return;
+  self.registration.showNotification(title, {
+    body,
+    icon: `${BASE}icon-192.png`,
+    badge: `${BASE}icon-192.png`,
+    tag,
+    renotify: true,
+    vibrate: [150, 50, 150],
+    data: { url: '/' },
+  });
+}
+
+// ── Schedulers ────────────────────────────────────────────────────────────────
+const timers = {};
+
+function scheduleDaily(key, istHour, istMinute, title, body) {
+  if (timers[key]) clearTimeout(timers[key]);
+  const ms = msUntilDailyIST(istHour, istMinute);
+  timers[key] = setTimeout(() => {
+    showNotification(title, body, key);
+    timers[key] = null;
+    scheduleDaily(key, istHour, istMinute, title, body); // reschedule tomorrow
   }, ms);
+}
+
+function scheduleWeekly(key, dayOfWeek, istHour, istMinute, title, body) {
+  if (timers[key]) clearTimeout(timers[key]);
+  const ms = msUntilWeeklyIST(dayOfWeek, istHour, istMinute);
+  timers[key] = setTimeout(() => {
+    showNotification(title, body, key);
+    timers[key] = null;
+    scheduleWeekly(key, dayOfWeek, istHour, istMinute, title, body); // reschedule next week
+  }, ms);
+}
+
+function scheduleAll() {
+  // 9:00 AM IST daily — morning focus reminder
+  scheduleDaily(
+    'morning-goals',
+    9, 0,
+    'Superhero HQ — Watch Your Goals',
+    'Your quests are live. Stay on mission, Anurag.'
+  );
+
+  // 10:00 PM IST daily — evening update prompt
+  scheduleDaily(
+    'evening-update',
+    22, 0,
+    'Superhero HQ — Update Daily Tasks',
+    'Mark what you completed today before the day ends.'
+  );
+
+  // Sunday 8:00 PM IST — sprint deadline warning
+  scheduleWeekly(
+    'sprint-deadline',
+    0, 20, 0,
+    'Superhero HQ — Submit Your Mission',
+    'Sprint closes at midnight IST. Submit before it auto-closes.'
+  );
+
 }

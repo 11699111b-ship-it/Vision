@@ -174,9 +174,9 @@ function SubmissionOverlay({ result, onClose }) {
       ? 'SOLID EFFORT'
       : 'RESET & CONQUER';
   const sub = percentage === 100
-    ? 'Perfect week, Boss Anurag. You leveled up!'
+    ? 'Perfect week, Anurag. You leveled up!'
     : percentage >= 50
-      ? 'Almost there. Keep pushing, Boss Anurag.'
+      ? 'Almost there. Keep pushing, Anurag.'
       : 'Rough week, but we kept the lights on.';
 
   return (
