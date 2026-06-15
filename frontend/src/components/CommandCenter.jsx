@@ -4,6 +4,8 @@ import { ChevronDown, ChevronRight, Plus, X, Rocket, AlertTriangle, Check, Zap, 
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import { FOUNDER_GRIND, RECOVERY_WEEK } from '../data/loadouts';
+import FocusModePanel from './FocusModePanel';
+import usePersistentCollapse from '../hooks/usePersistentCollapse';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
@@ -144,6 +146,7 @@ function MobileReceiptBar() {
         borderBottom: '1px solid rgba(0,229,255,0.2)',
         padding: '8px 14px 10px',
         background: 'rgba(0,229,255,0.02)',
+        flexShrink: 0,
       }}
     >
       <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.14em', marginBottom: 6 }}>
@@ -397,9 +400,48 @@ function FloorSection({ floor }) {
   );
 }
 
+// ── All Floors — collapsible wrapper ──────────────────────────────────────────
+function AllFloorsSection({ floors }) {
+  const [open, setOpen] = usePersistentCollapse('floors', true);
+  const ChevronIcon = open ? ChevronDown : ChevronRight;
+
+  return (
+    <div>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '11px 16px',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <ChevronIcon size={10} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
+        <span style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 11, fontWeight: 700,
+          color: 'rgba(255,255,255,0.35)', letterSpacing: '0.14em', flex: 1,
+        }}>
+          ALL FLOORS
+        </span>
+        <span style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 10,
+          color: 'rgba(255,255,255,0.18)',
+        }}>
+          {floors.length} FLOORS
+        </span>
+      </div>
+      {open && floors.map(floor => (
+        <FloorSection key={floor.id} floor={floor} />
+      ))}
+    </div>
+  );
+}
+
 // ── Smart Loadouts panel ───────────────────────────────────────────────────────
 function LoadoutsPanel() {
   const { dispatch, lastSprintQuestIds } = useAppContext();
+  const [open, setOpen] = usePersistentCollapse('loadouts', true);
+  const ChevronIcon = open ? ChevronDown : ChevronRight;
   const hasLastWeek = lastSprintQuestIds && lastSprintQuestIds.length > 0;
 
   const handleLoad = (questIds) => {
@@ -422,14 +464,22 @@ function LoadoutsPanel() {
   });
 
   return (
-    <div style={{ padding: '12px 16px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center gap-2 mb-3">
+    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '11px 16px', cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <ChevronIcon size={10} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
         <Zap size={11} color="rgba(255,255,255,0.25)" />
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em' }}>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.18em', flex: 1 }}>
           SMART LOADOUTS
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {open && (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '0 16px 14px' }}>
         <motion.button
           data-testid="loadout-founder-btn"
           style={pillBtn('#39FF14')}
@@ -464,6 +514,7 @@ function LoadoutsPanel() {
           REPEAT LAST WEEK
         </motion.button>
       </div>
+      )}
     </div>
   );
 }
@@ -478,10 +529,7 @@ export default function CommandCenter() {
   return (
     <div data-testid="command-center" className="flex flex-col h-full">
 
-      {/* Smart Loadouts */}
-      <LoadoutsPanel />
-
-      {/* EP budget strip + Reset button */}
+      {/* 1. EP budget strip — FIRST */}
       <div
         data-testid="ep-budget-display"
         className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0"
@@ -503,8 +551,6 @@ export default function CommandCenter() {
         <span style={{ fontSize: 11, color: '#444', fontFamily: 'Space Mono, monospace', flexShrink: 0 }}>
           {activeSprint.selectedQuestIds.length}
         </span>
-
-        {/* Reset Sprint button */}
         <motion.button
           data-testid="reset-sprint-btn"
           onClick={() => { if (hasSelection) { boop(); dispatch({ type: 'RESET_SPRINT' }); } }}
@@ -512,14 +558,10 @@ export default function CommandCenter() {
           style={{
             background: 'transparent',
             border: `1px solid ${hasSelection ? 'rgba(255,59,48,0.3)' : 'rgba(255,255,255,0.06)'}`,
-            borderRadius: 6,
-            padding: '3px 8px',
+            borderRadius: 6, padding: '3px 8px',
             cursor: hasSelection ? 'pointer' : 'not-allowed',
             opacity: hasSelection ? 1 : 0.35,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
           }}
           whileHover={hasSelection ? { background: 'rgba(255,59,48,0.1)', borderColor: 'rgba(255,59,48,0.6)' } : {}}
           whileTap={hasSelection ? { scale: 0.94 } : {}}
@@ -531,14 +573,18 @@ export default function CommandCenter() {
         </motion.button>
       </div>
 
-      {/* Blueprint — all floors collapsed by default */}
-      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-        {/* Mobile receipt bar (replaces building panel on small screens) */}
-        <MobileReceiptBar />
+      {/* 2. Selected tasks (mobile only) — between EP and Smart Loadouts */}
+      <MobileReceiptBar />
 
-        {blueprint.floors.map(floor => (
-          <FloorSection key={floor.id} floor={floor} />
-        ))}
+      {/* 3. Smart Loadouts */}
+      <LoadoutsPanel />
+
+      {/* 4. Focus Mode */}
+      <FocusModePanel />
+
+      {/* 5. Blueprint — scrollable, All Floors collapsible */}
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
+        <AllFloorsSection floors={blueprint.floors} />
         <div style={{ height: 20 }} />
       </div>
 

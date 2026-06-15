@@ -19,3 +19,7 @@ credentials.json
 
 # Worktrees
 .worktrees/
+
+# macOS / scratch
+.DS_Store
+.superpowers/

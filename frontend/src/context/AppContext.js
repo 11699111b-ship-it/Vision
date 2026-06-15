@@ -8,7 +8,7 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzyZTaQOLvFsmD1DCZbKgYt
 export const MAX_EP = 20;
 export const UPKEEP_MIN_EP = 5;
 
-export function buildQuestLookup(blueprint) {
+export function buildQuestLookup(blueprint, focusItems = []) {
   const map = {};
   blueprint.floors.forEach(floor => {
     floor.rooms.forEach(room => {
@@ -17,6 +17,23 @@ export function buildQuestLookup(blueprint) {
           map[quest.id] = { quest, goal, room, floor };
         });
       });
+    });
+  });
+  // Focus-owned custom quests — synthesize goal/room/floor so EP, selection,
+  // and Goals Tracker logic all work the same as blueprint quests.
+  const focusFloor = { id: 'focus', number: 99, name: 'Focus' };
+  focusItems.forEach(focus => {
+    (focus.customQuests || []).forEach(cq => {
+      const goal = {
+        id: `${focus.id}-custom-${cq.id}`,   // contains 'custom' → tracked as custom goal
+        name: cq.text,
+        tag: cq.tag,
+        epCost: cq.epCost,
+        quests: [cq],
+        isCustom: true,
+      };
+      const room = { id: focus.id, name: focus.name, locked: false };
+      map[cq.id] = { quest: cq, goal, room, floor: focusFloor };
     });
   });
   return map;
@@ -79,10 +96,11 @@ const initialState = {
   submissionResult: null,
   lastSprintQuestIds: [],
   autoSubmittedMessage: null,
+  focusItems: [],
 };
 
-function reducer(state, action) {
-  const lookup = buildQuestLookup(state.blueprint);
+export function reducer(state, action) {
+  const lookup = buildQuestLookup(state.blueprint, state.focusItems);
 
   switch (action.type) {
     case 'LOAD_STATE': {
@@ -123,6 +141,7 @@ function reducer(state, action) {
         avgCompletion: p.avgCompletion ?? 0,
         sprintCount: p.sprintCount ?? 0,
         lastSprintQuestIds: p.lastSprintQuestIds ?? [],
+        focusItems: p.focusItems ?? [],
       };
     }
 
@@ -431,6 +450,90 @@ function reducer(state, action) {
       };
     }
 
+    case 'ADD_FOCUS': {
+      const newFocus = {
+        id: 'focus-' + Date.now(),
+        name: action.name.trim().toUpperCase(),
+        linkedQuestIds: [],
+        customQuests: [],
+      };
+      return { ...state, focusItems: [...state.focusItems, newFocus] };
+    }
+
+    case 'DELETE_FOCUS': {
+      const focus = state.focusItems.find(f => f.id === action.focusId);
+      // Custom quests live only inside the focus — drop them from the sprint too.
+      const customIds = (focus?.customQuests || []).map(q => q.id);
+      const selectedQuestIds = customIds.length
+        ? state.activeSprint.selectedQuestIds.filter(id => !customIds.includes(id))
+        : state.activeSprint.selectedQuestIds;
+      return {
+        ...state,
+        focusItems: state.focusItems.filter(f => f.id !== action.focusId),
+        activeSprint: { ...state.activeSprint, selectedQuestIds },
+      };
+    }
+
+    case 'TOGGLE_QUEST_IN_FOCUS': {
+      return {
+        ...state,
+        focusItems: state.focusItems.map(f => {
+          if (f.id !== action.focusId) return f;
+          const already = f.linkedQuestIds.includes(action.questId);
+          return {
+            ...f,
+            linkedQuestIds: already
+              ? f.linkedQuestIds.filter(id => id !== action.questId)
+              : [...f.linkedQuestIds, action.questId],
+          };
+        }),
+      };
+    }
+
+    case 'ADD_FOCUS_CUSTOM_QUEST': {
+      const { focusId, text, frequency, tag } = action;
+      const trimmed = (text || '').trim();
+      if (!trimmed) return state;
+      const ts = Date.now();
+      const cq = {
+        id: `focuscq-${ts}`,
+        text: trimmed,
+        frequency,
+        tag,
+        epCost: EP_COSTS[tag] || 2,
+      };
+      const focusItems = state.focusItems.map(f =>
+        f.id === focusId ? { ...f, customQuests: [...(f.customQuests || []), cq] } : f
+      );
+      // Auto-select the new quest into the sprint if it fits the EP budget.
+      const newLookup = buildQuestLookup(state.blueprint, focusItems);
+      const selected = state.activeSprint.selectedQuestIds;
+      const curEP = calcTotalEP(newLookup, selected);
+      const selectedQuestIds = curEP + cq.epCost <= MAX_EP ? [...selected, cq.id] : selected;
+      return {
+        ...state,
+        launchError: null,
+        focusItems,
+        activeSprint: { ...state.activeSprint, selectedQuestIds },
+      };
+    }
+
+    case 'DELETE_FOCUS_CUSTOM_QUEST': {
+      const { focusId, questId } = action;
+      return {
+        ...state,
+        focusItems: state.focusItems.map(f =>
+          f.id === focusId
+            ? { ...f, customQuests: (f.customQuests || []).filter(q => q.id !== questId) }
+            : f
+        ),
+        activeSprint: {
+          ...state.activeSprint,
+          selectedQuestIds: state.activeSprint.selectedQuestIds.filter(id => id !== questId),
+        },
+      };
+    }
+
     default:
       return state;
   }
@@ -591,7 +694,7 @@ export function AppProvider({ children }) {
     return () => clearInterval(id);
   }, [state.activeSprint.sprintStartDate]);
 
-  const questLookup = useMemo(() => buildQuestLookup(state.blueprint), [state.blueprint]);
+  const questLookup = useMemo(() => buildQuestLookup(state.blueprint, state.focusItems), [state.blueprint, state.focusItems]);
   const totalEP = useMemo(() => calcTotalEP(questLookup, state.activeSprint.selectedQuestIds), [questLookup, state.activeSprint.selectedQuestIds]);
   const floor01EP = useMemo(() => calcFloor01EP(questLookup, state.activeSprint.selectedQuestIds), [questLookup, state.activeSprint.selectedQuestIds]);
   const heroInfo = useMemo(() => getHeroInfo(state.xp), [state.xp]);
