@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronRight, ChevronDown, Check } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
+import QuestFilterBar, { filterFloors } from './QuestFilterBar';
 
 // ── Single quest row — checks linkedQuestIds, not selectedQuestIds ─────────────
 function MapperQuestRow({ quest, isLinked, focusId, isLast }) {
@@ -86,18 +87,19 @@ function MapperGoalGroup({ goal, focusId, linkedQuestIds }) {
 }
 
 // ── Room accordion inside mapper ───────────────────────────────────────────────
-function MapperRoomSection({ room, focusId, linkedQuestIds }) {
+function MapperRoomSection({ room, focusId, linkedQuestIds, forceOpen }) {
   const [open, setOpen] = useState(false);
   const allGoals = [...room.goals, ...(room.customGoals || [])];
   const linkedInRoom = allGoals.flatMap(g => g.quests).filter(q => linkedQuestIds.includes(q.id)).length;
-  const ChevronIcon = open ? ChevronDown : ChevronRight;
+  const isOpen = forceOpen || open;
+  const ChevronIcon = isOpen ? ChevronDown : ChevronRight;
 
   return (
     <div>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { if (!forceOpen) setOpen(o => !o); }}
         className="w-full flex items-center gap-2 text-left"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '9px 16px' }}
+        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '9px 16px' }}
       >
         <span style={{
           fontSize: 12, fontWeight: 600, flex: 1,
@@ -114,9 +116,9 @@ function MapperRoomSection({ room, focusId, linkedQuestIds }) {
         {room.locked && (
           <span style={{ fontSize: 10, color: '#444', fontFamily: 'Space Mono, monospace' }}>LOCKED</span>
         )}
-        <ChevronIcon size={12} color="rgba(255,255,255,0.2)" style={{ flexShrink: 0 }} />
+        {!forceOpen && <ChevronIcon size={12} color="rgba(255,255,255,0.2)" style={{ flexShrink: 0 }} />}
       </button>
-      {open && !room.locked && (
+      {isOpen && !room.locked && (
         <div style={{ padding: '8px 0 4px' }}>
           {allGoals.map(goal => (
             <MapperGoalGroup
@@ -133,16 +135,17 @@ function MapperRoomSection({ room, focusId, linkedQuestIds }) {
 }
 
 // ── Floor accordion inside mapper ──────────────────────────────────────────────
-function MapperFloorSection({ floor, focusId, linkedQuestIds }) {
+function MapperFloorSection({ floor, focusId, linkedQuestIds, forceOpen }) {
   const [open, setOpen] = useState(false);
-  const ChevronIcon = open ? ChevronDown : ChevronRight;
+  const isOpen = forceOpen || open;
+  const ChevronIcon = isOpen ? ChevronDown : ChevronRight;
 
   return (
     <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { if (!forceOpen) setOpen(o => !o); }}
         className="w-full flex items-center gap-3 text-left"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '13px 16px' }}
+        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '13px 16px' }}
       >
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em', flexShrink: 0 }}>
           F{floor.number}
@@ -150,9 +153,9 @@ function MapperFloorSection({ floor, focusId, linkedQuestIds }) {
         <span style={{ fontSize: 14, fontWeight: 700, color: '#ffffff', flex: 1, fontFamily: 'system-ui, sans-serif' }}>
           {floor.name}
         </span>
-        <ChevronIcon size={14} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
+        {!forceOpen && <ChevronIcon size={14} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />}
       </button>
-      {open && (
+      {isOpen && (
         <div style={{ background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
           {floor.rooms.map(room => (
             <MapperRoomSection
@@ -160,6 +163,7 @@ function MapperFloorSection({ floor, focusId, linkedQuestIds }) {
               room={room}
               focusId={focusId}
               linkedQuestIds={linkedQuestIds}
+              forceOpen={forceOpen}
             />
           ))}
         </div>
@@ -171,8 +175,12 @@ function MapperFloorSection({ floor, focusId, linkedQuestIds }) {
 // ── Overlay root ───────────────────────────────────────────────────────────────
 export default function QuestMapperOverlay({ focusId, onClose }) {
   const { blueprint, focusItems } = useAppContext();
+  const [filterQuery, setFilterQuery] = useState('');
   const focus = focusItems.find(f => f.id === focusId);
   if (!focus) return null;
+
+  const isFiltering = !!filterQuery.trim();
+  const displayFloors = isFiltering ? filterFloors(blueprint.floors, filterQuery) : blueprint.floors;
 
   return (
     <div style={{
@@ -212,16 +220,28 @@ export default function QuestMapperOverlay({ focusId, onClose }) {
         </span>
       </div>
 
+      {/* Filter bar */}
+      <QuestFilterBar value={filterQuery} onChange={setFilterQuery} />
+
       {/* Blueprint accordion — scrollable */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {blueprint.floors.map(floor => (
-          <MapperFloorSection
-            key={floor.id}
-            floor={floor}
-            focusId={focusId}
-            linkedQuestIds={focus.linkedQuestIds}
-          />
-        ))}
+        {displayFloors.length === 0 && isFiltering ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', fontFamily: 'Space Mono, monospace', margin: 0 }}>
+              no quests match
+            </p>
+          </div>
+        ) : (
+          displayFloors.map(floor => (
+            <MapperFloorSection
+              key={floor.id}
+              floor={floor}
+              focusId={focusId}
+              linkedQuestIds={focus.linkedQuestIds}
+              forceOpen={isFiltering}
+            />
+          ))
+        )}
         <div style={{ height: 32 }} />
       </div>
     </div>

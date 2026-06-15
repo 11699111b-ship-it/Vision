@@ -6,6 +6,7 @@ import { boop } from '../utils/audioEngine';
 import { FOUNDER_GRIND, RECOVERY_WEEK } from '../data/loadouts';
 import FocusModePanel from './FocusModePanel';
 import usePersistentCollapse from '../hooks/usePersistentCollapse';
+import QuestFilterBar, { filterFloors } from './QuestFilterBar';
 
 const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
 
@@ -265,12 +266,13 @@ function CustomQuestForm({ floorId, roomId, onAdd, onClose }) {
 }
 
 // ── Room accordion ─────────────────────────────────────────────────────────────
-function RoomSection({ floor, room }) {
+function RoomSection({ floor, room, forceOpen }) {
   const { activeSprint, dispatch, isRoomActive } = useAppContext();
   const [open, setOpen] = useState(false);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const isActive = isRoomActive(room.id);
   const allGoals = [...room.goals, ...(room.customGoals || [])];
+  const isOpen = forceOpen || open;
 
   const handleToggle = (questId) => dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId });
   const handleAddCustom = (fId, rId, goal) => dispatch({ type: 'ADD_CUSTOM_GOAL', floorId: fId, roomId: rId, goal });
@@ -279,9 +281,9 @@ function RoomSection({ floor, room }) {
     <div>
       <button
         data-testid={`room-${room.id}-accordion`}
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { if (!forceOpen) setOpen(o => !o); }}
         className="w-full flex items-center gap-2 text-left"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '9px 16px' }}
+        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '9px 16px' }}
       >
         <span style={{
           fontSize: 12,
@@ -298,16 +300,18 @@ function RoomSection({ floor, room }) {
         {room.locked && (
           <span style={{ fontSize: 10, color: '#444', fontFamily: 'Space Mono, monospace' }}>LOCKED</span>
         )}
-        {open
+        {!forceOpen && (isOpen
           ? <ChevronDown size={12} color="rgba(255,255,255,0.2)" style={{ flexShrink: 0 }} />
           : <ChevronRight size={12} color="rgba(255,255,255,0.15)" style={{ flexShrink: 0 }} />
-        }
+        )}
       </button>
 
       <AnimatePresence>
-        {open && (
+        {isOpen && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            initial={forceOpen ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={forceOpen ? {} : { height: 0, opacity: 0 }}
             transition={{ duration: 0.18 }}
             style={{ overflow: 'hidden', padding: '8px 16px 4px' }}
           >
@@ -322,31 +326,35 @@ function RoomSection({ floor, room }) {
               />
             ))}
 
-            <AnimatePresence>
-              {showCustomForm && (
-                <CustomQuestForm
-                  floorId={floor.id}
-                  roomId={room.id}
-                  onAdd={handleAddCustom}
-                  onClose={() => setShowCustomForm(false)}
-                />
-              )}
-            </AnimatePresence>
+            {!forceOpen && (
+              <>
+                <AnimatePresence>
+                  {showCustomForm && (
+                    <CustomQuestForm
+                      floorId={floor.id}
+                      roomId={room.id}
+                      onAdd={handleAddCustom}
+                      onClose={() => setShowCustomForm(false)}
+                    />
+                  )}
+                </AnimatePresence>
 
-            {!room.locked && (
-              <button
-                onClick={() => { setShowCustomForm(v => !v); boop(); }}
-                className="flex items-center gap-2 w-full"
-                style={{
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '7px 2px', borderTop: '1px dashed rgba(255,255,255,0.06)',
-                }}
-              >
-                <Plus size={11} color="#00E5FF" />
-                <span style={{ fontSize: 11, color: '#00E5FF', fontFamily: 'Space Mono, monospace', letterSpacing: '0.07em' }}>
-                  ADD CUSTOM QUEST
-                </span>
-              </button>
+                {!room.locked && (
+                  <button
+                    onClick={() => { setShowCustomForm(v => !v); boop(); }}
+                    className="flex items-center gap-2 w-full"
+                    style={{
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      padding: '7px 2px', borderTop: '1px dashed rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <Plus size={11} color="#00E5FF" />
+                    <span style={{ fontSize: 11, color: '#00E5FF', fontFamily: 'Space Mono, monospace', letterSpacing: '0.07em' }}>
+                      ADD CUSTOM QUEST
+                    </span>
+                  </button>
+                )}
+              </>
             )}
           </motion.div>
         )}
@@ -356,17 +364,19 @@ function RoomSection({ floor, room }) {
 }
 
 // ── Floor accordion (starts COLLAPSED — fixes Hick's Law violation) ────────────
-function FloorSection({ floor }) {
+function FloorSection({ floor, forceOpen }) {
   const [open, setOpen] = useState(false);
+  const isOpen = forceOpen || open;
+
   return (
     <div
       data-testid={`floor-${floor.number}-accordion`}
       style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
     >
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { if (!forceOpen) setOpen(o => !o); }}
         className="w-full flex items-center gap-3 text-left"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '13px 16px' }}
+        style={{ background: 'none', border: 'none', cursor: forceOpen ? 'default' : 'pointer', padding: '13px 16px' }}
       >
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.22)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em', flexShrink: 0 }}>
           F{floor.number}
@@ -377,21 +387,23 @@ function FloorSection({ floor }) {
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.18)', fontFamily: 'Space Mono, monospace', flexShrink: 0 }}>
           {floor.rooms.length}
         </span>
-        {open
+        {!forceOpen && (isOpen
           ? <ChevronDown size={14} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
           : <ChevronRight size={14} color="rgba(255,255,255,0.18)" style={{ flexShrink: 0 }} />
-        }
+        )}
       </button>
 
       <AnimatePresence>
-        {open && (
+        {isOpen && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            initial={forceOpen ? false : { height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={forceOpen ? {} : { height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
             style={{ overflow: 'hidden', background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.04)' }}
           >
             {floor.rooms.map(room => (
-              <RoomSection key={room.id} floor={floor} room={room} />
+              <RoomSection key={room.id} floor={floor} room={room} forceOpen={forceOpen} />
             ))}
           </motion.div>
         )}
@@ -401,22 +413,25 @@ function FloorSection({ floor }) {
 }
 
 // ── All Floors — collapsible wrapper ──────────────────────────────────────────
-function AllFloorsSection({ floors }) {
+function AllFloorsSection({ floors, filterQuery }) {
   const [open, setOpen] = usePersistentCollapse('floors', true);
-  const ChevronIcon = open ? ChevronDown : ChevronRight;
+  const isFiltering = !!filterQuery.trim();
+  const displayFloors = isFiltering ? filterFloors(floors, filterQuery) : floors;
+  const isOpen = open || isFiltering;
+  const ChevronIcon = isOpen ? ChevronDown : ChevronRight;
 
   return (
     <div>
       <div
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { if (!isFiltering) setOpen(o => !o); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '11px 16px',
           borderBottom: '1px solid rgba(255,255,255,0.05)',
-          cursor: 'pointer', userSelect: 'none',
+          cursor: isFiltering ? 'default' : 'pointer', userSelect: 'none',
         }}
       >
-        <ChevronIcon size={10} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />
+        {!isFiltering && <ChevronIcon size={10} color="rgba(255,255,255,0.22)" style={{ flexShrink: 0 }} />}
         <span style={{
           fontFamily: 'Space Mono, monospace', fontSize: 11, fontWeight: 700,
           color: 'rgba(255,255,255,0.35)', letterSpacing: '0.14em', flex: 1,
@@ -425,13 +440,22 @@ function AllFloorsSection({ floors }) {
         </span>
         <span style={{
           fontFamily: 'Space Mono, monospace', fontSize: 10,
-          color: 'rgba(255,255,255,0.18)',
+          color: isFiltering ? 'rgba(57,255,20,0.5)' : 'rgba(255,255,255,0.18)',
         }}>
-          {floors.length} FLOORS
+          {isFiltering ? `${displayFloors.length} MATCH` : `${floors.length} FLOORS`}
         </span>
       </div>
-      {open && floors.map(floor => (
-        <FloorSection key={floor.id} floor={floor} />
+
+      {isOpen && displayFloors.length === 0 && isFiltering && (
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', fontFamily: 'Space Mono, monospace', margin: 0 }}>
+            no quests match
+          </p>
+        </div>
+      )}
+
+      {isOpen && displayFloors.map(floor => (
+        <FloorSection key={floor.id} floor={floor} forceOpen={isFiltering} />
       ))}
     </div>
   );
@@ -522,6 +546,7 @@ function LoadoutsPanel() {
 // ── Main export ────────────────────────────────────────────────────────────────
 export default function CommandCenter() {
   const { blueprint, totalEP, MAX_EP, activeSprint, launchError, dispatch } = useAppContext();
+  const [filterQuery, setFilterQuery] = useState('');
   const canLaunch = activeSprint.selectedQuestIds.length > 0 && totalEP <= MAX_EP;
   const epPct = Math.min((totalEP / MAX_EP) * 100, 100);
   const hasSelection = activeSprint.selectedQuestIds.length > 0;
@@ -576,15 +601,18 @@ export default function CommandCenter() {
       {/* 2. Selected tasks (mobile only) — between EP and Smart Loadouts */}
       <MobileReceiptBar />
 
-      {/* 3. Smart Loadouts */}
+      {/* 3. Quest filter bar */}
+      <QuestFilterBar value={filterQuery} onChange={setFilterQuery} />
+
+      {/* 4. Smart Loadouts */}
       <LoadoutsPanel />
 
-      {/* 4. Focus Mode */}
+      {/* 5. Focus Mode */}
       <FocusModePanel />
 
-      {/* 5. Blueprint — scrollable, All Floors collapsible */}
+      {/* 6. Blueprint — scrollable, All Floors collapsible */}
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-        <AllFloorsSection floors={blueprint.floors} />
+        <AllFloorsSection floors={blueprint.floors} filterQuery={filterQuery} />
         <div style={{ height: 20 }} />
       </div>
 
