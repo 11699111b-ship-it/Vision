@@ -145,6 +145,7 @@ function MobileReceiptBar() {
         borderBottom: '1px solid rgba(0,229,255,0.2)',
         padding: '8px 14px 10px',
         background: 'rgba(0,229,255,0.02)',
+        flexShrink: 0,
       }}
     >
       <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', fontFamily: 'Space Mono, monospace', letterSpacing: '0.14em', marginBottom: 6 }}>
@@ -560,15 +561,17 @@ export default function CommandCenter() {
         </motion.button>
       </div>
 
-      {/* 2. Smart Loadouts — SECOND */}
+      {/* 2. Selected tasks (mobile only) — between EP and Smart Loadouts */}
+      <MobileReceiptBar />
+
+      {/* 3. Smart Loadouts */}
       <LoadoutsPanel />
 
-      {/* 3. Focus Mode — THIRD */}
+      {/* 4. Focus Mode */}
       <FocusModePanel />
 
-      {/* 4. Blueprint — scrollable, All Floors collapsible */}
+      {/* 5. Blueprint — scrollable, All Floors collapsible */}
       <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
-        <MobileReceiptBar />
         <AllFloorsSection floors={blueprint.floors} />
         <div style={{ height: 20 }} />
       </div>
