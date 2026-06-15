@@ -241,11 +241,12 @@ export default function TrackingMode() {
 
   const handleSubmit = () => {
     const total = selectedQuestIds.length;
-    if (total === 0) return;
-    const pct = Math.round(((dailyDone + weeklyDone) / total) * 100);
-    if (pct === 100) { playTriumphant(); }
-    else if (pct >= 50) { playSuccess(); }
-    else { playLowPitch(); }
+    if (total > 0) {
+      const pct = Math.round(((dailyDone + weeklyDone) / total) * 100);
+      if (pct === 100) { playTriumphant(); }
+      else if (pct >= 50) { playSuccess(); }
+      else { playLowPitch(); }
+    }
     dispatch({ type: 'SUBMIT_MISSION' });
   };
 

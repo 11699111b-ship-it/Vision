@@ -87,8 +87,12 @@ function reducer(state, action) {
   switch (action.type) {
     case 'LOAD_STATE': {
       const p = action.payload;
-      const sprint = p.activeSprint ?? initialState.activeSprint;
-      const hasMission = !!sprint.sprintStartDate;
+      let sprint = p.activeSprint ?? initialState.activeSprint;
+      const hasMission = !!sprint.sprintStartDate && (sprint.selectedQuestIds?.length ?? 0) > 0;
+      // Orphaned sprint: start date set but no quests — clear it so user isn't stuck
+      if (sprint.sprintStartDate && !hasMission) {
+        sprint = { ...initialState.activeSprint };
+      }
       let view = p.appView === 'welcome' ? 'planning' : (p.appView || 'planning');
       if (hasMission) view = 'tracking';
       // Reconstruct blueprint: if full blueprint present (localStorage), use it.
@@ -194,7 +198,11 @@ function reducer(state, action) {
       const { activeSprint } = state;
       const { selectedQuestIds, completedTodayIds, completedWeeklyIds, dailyCompletionHistory } = activeSprint;
       const total = selectedQuestIds.length;
-      if (total === 0) return { ...state, appView: 'planning', submissionResult: { percentage: 0, isPerfect: false } };
+      if (total === 0) return {
+        ...state,
+        appView: 'planning',
+        activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
+      };
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
       const nonDailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency !== 'Daily');
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
