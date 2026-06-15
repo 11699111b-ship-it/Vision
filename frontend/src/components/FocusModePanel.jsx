@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, Check, Plus } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { boop } from '../utils/audioEngine';
 import QuestMapperOverlay from './QuestMapperOverlay';
 
-// ── Inline add-focus form ──────────────────────────────────────────────────────
+const FREQ_COLORS = { Daily: '#39FF14', Weekly: '#00E5FF', Monthly: '#FFA500', Quarterly: '#cc44ff' };
+
+// ── Inline add-focus form (creates a new focus card) ───────────────────────────
 function AddFocusForm({ onClose }) {
   const [name, setName] = useState('');
   const { dispatch } = useAppContext();
@@ -21,15 +23,10 @@ function AddFocusForm({ onClose }) {
     <form
       onSubmit={handleSubmit}
       style={{
-        gridColumn: '1 / -1',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        display: 'flex', alignItems: 'center', gap: 8,
         background: 'rgba(57,255,20,0.04)',
         border: '1px dashed rgba(57,255,20,0.22)',
-        borderRadius: 8,
-        padding: '10px 12px',
-        marginBottom: 2,
+        borderRadius: 8, padding: '10px 12px', marginBottom: 8,
       }}
     >
       <input
@@ -39,124 +36,247 @@ function AddFocusForm({ onClose }) {
         placeholder="JOB, BODY, SITE..."
         maxLength={16}
         style={{
-          flex: 1,
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px solid rgba(57,255,20,0.3)',
-          color: '#39FF14',
-          fontFamily: 'Space Mono, monospace',
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: '0.06em',
-          outline: 'none',
-          padding: '2px 0',
+          flex: 1, background: 'transparent', border: 'none',
+          borderBottom: '1px solid rgba(57,255,20,0.3)', color: '#39FF14',
+          fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700,
+          letterSpacing: '0.06em', outline: 'none', padding: '2px 0',
         }}
       />
-      <button
-        type="submit"
-        style={{
-          background: '#39FF14', border: 'none', borderRadius: 4,
-          padding: '4px 10px', fontFamily: 'Space Mono, monospace',
-          fontSize: 10, fontWeight: 700, color: '#000', cursor: 'pointer',
-        }}
-      >
+      <button type="submit" style={{
+        background: '#39FF14', border: 'none', borderRadius: 4, padding: '4px 10px',
+        fontFamily: 'Space Mono, monospace', fontSize: 10, fontWeight: 700, color: '#000', cursor: 'pointer',
+      }}>
         ADD
       </button>
-      <button
-        type="button"
-        onClick={onClose}
-        style={{
-          background: 'none', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 4, padding: '4px 7px', fontSize: 10,
-          color: 'rgba(255,255,255,0.3)', cursor: 'pointer',
-        }}
-      >
+      <button type="button" onClick={onClose} style={{
+        background: 'none', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
+        padding: '4px 7px', fontSize: 10, color: 'rgba(255,255,255,0.3)', cursor: 'pointer',
+      }}>
         ×
       </button>
     </form>
   );
 }
 
-// ── Single focus card ──────────────────────────────────────────────────────────
-function FocusCard({ focus, onMap }) {
+// ── Inline add-custom-quest form (adds a custom quest to one focus) ─────────────
+function AddCustomQuestForm({ focusId, onClose }) {
+  const [text, setText] = useState('');
+  const [frequency, setFrequency] = useState('Daily');
+  const [tag, setTag] = useState('Daily Power-Up');
   const { dispatch } = useAppContext();
-  const hasQuests = focus.linkedQuestIds.length > 0;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    dispatch({ type: 'ADD_FOCUS_CUSTOM_QUEST', focusId, text: text.trim(), frequency, tag });
+    boop();
+    onClose();
+  };
+
+  const selectStyle = {
+    background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', color: '#fff',
+    fontSize: 11, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', flex: 1,
+  };
 
   return (
-    <div
+    <form
+      onSubmit={handleSubmit}
       style={{
-        background: hasQuests ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.01)',
-        border: `1px solid ${hasQuests ? 'rgba(57,255,20,0.18)' : 'rgba(255,255,255,0.08)'}`,
-        borderRadius: 8,
-        padding: '10px 12px',
-        position: 'relative',
-        opacity: hasQuests ? 1 : 0.7,
+        background: 'rgba(0,229,255,0.025)', border: '1px solid rgba(0,229,255,0.12)',
+        borderRadius: 8, padding: '10px 12px', marginTop: 6,
       }}
     >
-      {/* Delete × */}
-      <button
-        onClick={() => { boop(); dispatch({ type: 'DELETE_FOCUS', focusId: focus.id }); }}
+      <input
+        autoFocus
+        value={text}
+        onChange={e => setText(e.target.value)}
+        placeholder="Custom quest name..."
+        required
         style={{
-          position: 'absolute', top: 6, right: 7,
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: 'rgba(255,255,255,0.15)', fontSize: 14, lineHeight: 1,
-          padding: '1px 3px', borderRadius: 3,
+          background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.12)',
+          color: '#fff', fontFamily: 'system-ui, sans-serif', fontSize: 13, outline: 'none',
+          padding: '4px 0', width: '100%',
         }}
-        onMouseOver={e => { e.currentTarget.style.color = '#FF3B30'; e.currentTarget.style.background = 'rgba(255,59,48,0.1)'; }}
-        onMouseOut={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.15)'; e.currentTarget.style.background = 'none'; }}
-      >
-        ×
-      </button>
+      />
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <select style={selectStyle} value={frequency} onChange={e => setFrequency(e.target.value)}>
+          <option>Daily</option><option>Weekly</option><option>Monthly</option>
+        </select>
+        <select style={selectStyle} value={tag} onChange={e => setTag(e.target.value)}>
+          <option>Daily Power-Up</option><option>Autopilot Bots</option><option>Big Missions</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button type="submit" style={{
+          background: '#39FF14', border: 'none', borderRadius: 6, color: '#000', fontSize: 11,
+          fontFamily: 'Space Mono, monospace', fontWeight: 700, padding: '5px 14px', cursor: 'pointer',
+        }}>
+          ADD
+        </button>
+        <button type="button" onClick={onClose} style={{
+          background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6,
+          color: 'rgba(255,255,255,0.35)', fontSize: 11, padding: '5px 10px', cursor: 'pointer',
+        }}>
+          CANCEL
+        </button>
+      </div>
+    </form>
+  );
+}
 
-      {/* Name */}
+// ── A single selectable quest row inside a focus card ──────────────────────────
+function FocusQuestRow({ text, frequency, isSelected, onToggle, onDelete }) {
+  const freqColor = FREQ_COLORS[frequency] || '#8B8B8D';
+  return (
+    <div
+      onClick={onToggle}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '9px 4px',
+        borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer',
+        background: isSelected ? 'rgba(57,255,20,0.04)' : 'transparent', transition: 'background 0.15s',
+      }}
+    >
       <div style={{
-        fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700,
-        color: hasQuests ? '#39FF14' : 'rgba(57,255,20,0.4)',
-        letterSpacing: '0.05em', marginBottom: 2,
-        paddingRight: 16,
+        width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+        border: `1.5px solid ${isSelected ? '#39FF14' : 'rgba(255,255,255,0.18)'}`,
+        background: isSelected ? '#39FF14' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {focus.name}
+        {isSelected && <Check size={9} color="#000" strokeWidth={3.5} />}
+      </div>
+      <p style={{
+        flex: 1, fontSize: 12.5, margin: 0, lineHeight: 1.4, minWidth: 0,
+        color: isSelected ? '#fff' : '#D1D5DB',
+        fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: isSelected ? 500 : 400,
+      }}>
+        {text}
+      </p>
+      <span style={{
+        fontSize: 9, color: freqColor, fontFamily: 'Space Mono, monospace',
+        border: `1px solid ${freqColor}25`, padding: '1px 4px', borderRadius: 3, flexShrink: 0,
+      }}>
+        {frequency[0]}
+      </span>
+      {onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); boop(); onDelete(); }}
+          title="Delete custom quest"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.2)',
+            fontSize: 13, lineHeight: 1, padding: '1px 3px', flexShrink: 0,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── A single focus card ─────────────────────────────────────────────────────────
+function FocusCard({ focus, onMap }) {
+  const { dispatch, questLookup, activeSprint } = useAppContext();
+  const [showCustomForm, setShowCustomForm] = useState(false);
+
+  const linked = focus.linkedQuestIds.map(id => questLookup[id]).filter(Boolean);
+  const customQuests = focus.customQuests || [];
+  const total = linked.length + customQuests.length;
+  const hasQuests = total > 0;
+
+  const allIds = [...focus.linkedQuestIds, ...customQuests.map(q => q.id)];
+  const selectedCount = allIds.filter(id => activeSprint.selectedQuestIds.includes(id)).length;
+  const isActive = selectedCount > 0;
+
+  const toggle = (questId) => { boop(); dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId }); };
+
+  return (
+    <div style={{
+      background: isActive ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.01)',
+      border: `1px solid ${isActive ? 'rgba(57,255,20,0.28)' : 'rgba(255,255,255,0.08)'}`,
+      borderRadius: 8, padding: '10px 12px', marginBottom: 8,
+      opacity: isActive ? 1 : 0.72, transition: 'opacity 0.15s, border-color 0.15s',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: hasQuests ? 6 : 8 }}>
+        <span style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 12.5, fontWeight: 700,
+          color: isActive ? '#39FF14' : 'rgba(57,255,20,0.5)', letterSpacing: '0.05em', flex: 1,
+        }}>
+          {focus.name}
+        </span>
+        <span style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 9,
+          color: hasQuests ? 'rgba(255,255,255,0.3)' : 'rgba(255,165,0,0.55)',
+        }}>
+          {hasQuests ? `${selectedCount} of ${total} selected` : 'no quests yet'}
+        </span>
+        <button
+          onClick={() => { boop(); dispatch({ type: 'DELETE_FOCUS', focusId: focus.id }); }}
+          title="Delete focus"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.18)',
+            fontSize: 15, lineHeight: 1, padding: '1px 3px', borderRadius: 3, flexShrink: 0,
+          }}
+          onMouseOver={e => { e.currentTarget.style.color = '#FF3B30'; }}
+          onMouseOut={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.18)'; }}
+        >
+          ×
+        </button>
       </div>
 
-      {/* Quest count */}
-      <div style={{
-        fontFamily: 'Space Mono, monospace', fontSize: 9, marginBottom: 8,
-        color: hasQuests ? 'rgba(255,255,255,0.28)' : 'rgba(255,165,0,0.5)',
-      }}>
-        {hasQuests
-          ? `${focus.linkedQuestIds.length} quest${focus.linkedQuestIds.length !== 1 ? 's' : ''} linked`
-          : 'no quests yet'}
-      </div>
+      {/* Checklist */}
+      {hasQuests && (
+        <div>
+          {linked.map(entry => (
+            <FocusQuestRow
+              key={entry.quest.id}
+              text={entry.quest.text}
+              frequency={entry.quest.frequency}
+              isSelected={activeSprint.selectedQuestIds.includes(entry.quest.id)}
+              onToggle={() => toggle(entry.quest.id)}
+            />
+          ))}
+          {customQuests.map(cq => (
+            <FocusQuestRow
+              key={cq.id}
+              text={cq.text}
+              frequency={cq.frequency}
+              isSelected={activeSprint.selectedQuestIds.includes(cq.id)}
+              onToggle={() => toggle(cq.id)}
+              onDelete={() => dispatch({ type: 'DELETE_FOCUS_CUSTOM_QUEST', focusId: focus.id, questId: cq.id })}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {hasQuests && (
-          <>
-            <button
-              onClick={() => { boop(); dispatch({ type: 'ADD_FOCUS_TO_SPRINT', focusId: focus.id }); }}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: 'Space Mono, monospace', fontSize: 10,
-                color: '#39FF14', padding: 0, letterSpacing: '0.03em',
-              }}
-            >
-              + Add to sprint
-            </button>
-            <span style={{ color: 'rgba(255,255,255,0.1)', fontSize: 10 }}>·</span>
-          </>
-        )}
+      {/* Footer actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: hasQuests ? 8 : 0 }}>
         <button
           onClick={() => onMap(focus.id)}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: 'Space Mono, monospace', fontSize: 9,
-            color: hasQuests ? 'rgba(0,229,255,0.55)' : 'rgba(255,165,0,0.65)',
-            padding: 0,
+            fontFamily: 'Space Mono, monospace', fontSize: 10,
+            color: hasQuests ? 'rgba(0,229,255,0.6)' : 'rgba(255,165,0,0.7)', padding: 0,
+            display: 'flex', alignItems: 'center', gap: 3,
           }}
         >
-          {hasQuests ? 'map' : '+ map quests'}
+          {hasQuests ? 'map quests' : '+ map quests'}
+        </button>
+        <button
+          onClick={() => { setShowCustomForm(v => !v); boop(); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(57,255,20,0.6)', padding: 0,
+            display: 'flex', alignItems: 'center', gap: 3,
+          }}
+        >
+          <Plus size={10} /> add custom
         </button>
       </div>
+
+      {showCustomForm && (
+        <AddCustomQuestForm focusId={focus.id} onClose={() => setShowCustomForm(false)} />
+      )}
     </div>
   );
 }
@@ -173,24 +293,16 @@ export default function FocusModePanel() {
   return (
     <>
       {mappingFocusId && (
-        <QuestMapperOverlay
-          focusId={mappingFocusId}
-          onClose={() => setMappingFocusId(null)}
-        />
+        <QuestMapperOverlay focusId={mappingFocusId} onClose={() => setMappingFocusId(null)} />
       )}
 
       <div style={{
-        borderBottom: '1px solid rgba(57,255,20,0.1)',
-        background: 'rgba(57,255,20,0.008)',
-        flexShrink: 0,
+        borderBottom: '1px solid rgba(57,255,20,0.1)', background: 'rgba(57,255,20,0.008)', flexShrink: 0,
       }}>
         {/* Header */}
         <div
           onClick={() => setOpen(o => !o)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '11px 16px', cursor: 'pointer', userSelect: 'none',
-          }}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', cursor: 'pointer', userSelect: 'none' }}
         >
           <ChevronIcon size={10} color="rgba(57,255,20,0.55)" style={{ flexShrink: 0 }} />
           <span style={{
@@ -202,11 +314,9 @@ export default function FocusModePanel() {
           <button
             onClick={e => { e.stopPropagation(); setShowAddForm(v => !v); boop(); }}
             style={{
-              background: 'rgba(57,255,20,0.08)',
-              border: '1px solid rgba(57,255,20,0.28)',
-              borderRadius: 5, padding: '3px 9px',
-              fontFamily: 'Space Mono, monospace', fontSize: 10,
-              color: '#39FF14', cursor: 'pointer', letterSpacing: '0.05em',
+              background: 'rgba(57,255,20,0.08)', border: '1px solid rgba(57,255,20,0.28)',
+              borderRadius: 5, padding: '3px 9px', fontFamily: 'Space Mono, monospace',
+              fontSize: 10, color: '#39FF14', cursor: 'pointer', letterSpacing: '0.05em',
             }}
           >
             + ADD
@@ -215,19 +325,19 @@ export default function FocusModePanel() {
 
         {/* Body */}
         {open && (
-          <div style={{ padding: '6px 12px 12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-              {showAddForm && (
-                <AddFocusForm onClose={() => setShowAddForm(false)} />
-              )}
-              {focusItems.map(focus => (
-                <FocusCard
-                  key={focus.id}
-                  focus={focus}
-                  onMap={id => setMappingFocusId(id)}
-                />
-              ))}
-            </div>
+          <div style={{ padding: '6px 14px 12px' }}>
+            {showAddForm && <AddFocusForm onClose={() => setShowAddForm(false)} />}
+            {focusItems.map(focus => (
+              <FocusCard key={focus.id} focus={focus} onMap={id => setMappingFocusId(id)} />
+            ))}
+            {focusItems.length === 0 && !showAddForm && (
+              <p style={{
+                fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(255,255,255,0.25)',
+                textAlign: 'center', padding: '8px 0', margin: 0,
+              }}>
+                No focuses yet — tap + ADD to create one
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { reducer } from './AppContext';
+import { reducer, buildQuestLookup } from './AppContext';
 import INITIAL_BLUEPRINT from '../data/blueprint';
 
 const baseState = {
@@ -23,11 +23,12 @@ const baseState = {
 };
 
 describe('ADD_FOCUS', () => {
-  it('creates a focus with uppercase name and empty linkedQuestIds', () => {
+  it('creates a focus with uppercase name, empty linkedQuestIds and customQuests', () => {
     const next = reducer(baseState, { type: 'ADD_FOCUS', name: 'job' });
     expect(next.focusItems).toHaveLength(1);
     expect(next.focusItems[0].name).toBe('JOB');
     expect(next.focusItems[0].linkedQuestIds).toEqual([]);
+    expect(next.focusItems[0].customQuests).toEqual([]);
     expect(next.focusItems[0].id).toMatch(/^focus-\d+$/);
   });
 
@@ -90,34 +91,77 @@ describe('TOGGLE_QUEST_IN_FOCUS', () => {
   });
 });
 
-describe('ADD_FOCUS_TO_SPRINT', () => {
-  const questId = 'f0-rA-g0-q0';
-
-  it('merges linked quests into selectedQuestIds without replacing', () => {
-    const existingQuestId = 'f1-rA-g0-q0';
+describe('DELETE_FOCUS strips custom quests from sprint', () => {
+  it('removes the deleted focus custom quest ids from selectedQuestIds', () => {
     const state = {
       ...baseState,
-      focusItems: [{ id: 'focus-1', name: 'BODY', linkedQuestIds: [questId] }],
-      activeSprint: { ...baseState.activeSprint, selectedQuestIds: [existingQuestId] },
+      focusItems: [{
+        id: 'focus-1', name: 'BODY', linkedQuestIds: [],
+        customQuests: [{ id: 'focuscq-1', text: 'Cold plunge', frequency: 'Daily', tag: 'Daily Power-Up', epCost: 2 }],
+      }],
+      activeSprint: { ...baseState.activeSprint, selectedQuestIds: ['focuscq-1', 'f1-rA-g0-q0'] },
     };
-    const next = reducer(state, { type: 'ADD_FOCUS_TO_SPRINT', focusId: 'focus-1' });
-    expect(next.activeSprint.selectedQuestIds).toContain(existingQuestId);
-    expect(next.activeSprint.selectedQuestIds).toContain(questId);
+    const next = reducer(state, { type: 'DELETE_FOCUS', focusId: 'focus-1' });
+    expect(next.activeSprint.selectedQuestIds).not.toContain('focuscq-1');
+    expect(next.activeSprint.selectedQuestIds).toContain('f1-rA-g0-q0');
+  });
+});
+
+describe('ADD_FOCUS_CUSTOM_QUEST', () => {
+  const state = {
+    ...baseState,
+    focusItems: [{ id: 'focus-1', name: 'BODY', linkedQuestIds: [], customQuests: [] }],
+  };
+
+  it('appends a custom quest with EP from its tag and auto-selects it', () => {
+    const next = reducer(state, {
+      type: 'ADD_FOCUS_CUSTOM_QUEST', focusId: 'focus-1',
+      text: 'Cold plunge', frequency: 'Daily', tag: 'Big Missions',
+    });
+    expect(next.focusItems[0].customQuests).toHaveLength(1);
+    const cq = next.focusItems[0].customQuests[0];
+    expect(cq.text).toBe('Cold plunge');
+    expect(cq.epCost).toBe(4);
+    expect(next.activeSprint.selectedQuestIds).toContain(cq.id);
   });
 
-  it('does not double-add a quest already in selectedQuestIds', () => {
+  it('ignores empty text', () => {
+    const next = reducer(state, {
+      type: 'ADD_FOCUS_CUSTOM_QUEST', focusId: 'focus-1',
+      text: '   ', frequency: 'Daily', tag: 'Daily Power-Up',
+    });
+    expect(next).toBe(state);
+  });
+});
+
+describe('DELETE_FOCUS_CUSTOM_QUEST', () => {
+  it('removes the custom quest and its sprint selection', () => {
     const state = {
       ...baseState,
-      focusItems: [{ id: 'focus-1', name: 'BODY', linkedQuestIds: [questId] }],
-      activeSprint: { ...baseState.activeSprint, selectedQuestIds: [questId] },
+      focusItems: [{
+        id: 'focus-1', name: 'BODY', linkedQuestIds: [],
+        customQuests: [{ id: 'focuscq-1', text: 'Cold plunge', frequency: 'Daily', tag: 'Daily Power-Up', epCost: 2 }],
+      }],
+      activeSprint: { ...baseState.activeSprint, selectedQuestIds: ['focuscq-1'] },
     };
-    const next = reducer(state, { type: 'ADD_FOCUS_TO_SPRINT', focusId: 'focus-1' });
-    const count = next.activeSprint.selectedQuestIds.filter(id => id === questId).length;
-    expect(count).toBe(1);
+    const next = reducer(state, { type: 'DELETE_FOCUS_CUSTOM_QUEST', focusId: 'focus-1', questId: 'focuscq-1' });
+    expect(next.focusItems[0].customQuests).toHaveLength(0);
+    expect(next.activeSprint.selectedQuestIds).not.toContain('focuscq-1');
   });
+});
 
-  it('returns state unchanged for unknown focusId', () => {
-    const next = reducer(baseState, { type: 'ADD_FOCUS_TO_SPRINT', focusId: 'does-not-exist' });
-    expect(next).toBe(baseState);
+describe('buildQuestLookup with focus custom quests', () => {
+  it('indexes focus custom quests with synthetic goal/room and custom goal id', () => {
+    const focusItems = [{
+      id: 'focus-1', name: 'BODY', linkedQuestIds: [],
+      customQuests: [{ id: 'focuscq-1', text: 'Cold plunge', frequency: 'Daily', tag: 'Big Missions', epCost: 4 }],
+    }];
+    const lookup = buildQuestLookup(INITIAL_BLUEPRINT, focusItems);
+    const entry = lookup['focuscq-1'];
+    expect(entry).toBeDefined();
+    expect(entry.goal.epCost).toBe(4);
+    expect(entry.goal.id).toContain('custom');
+    expect(entry.room.name).toBe('BODY');
+    expect(entry.quest.text).toBe('Cold plunge');
   });
 });
