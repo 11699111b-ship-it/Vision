@@ -15,6 +15,9 @@
 
 * { box-sizing: border-box; }
 
+/* Prevent iOS Safari from zooming on input focus (requires font-size >= 16px) */
+input, textarea, select { font-size: max(16px, 1em); }
+
 body {
   background-color: #050505;
   color: #ffffff;
