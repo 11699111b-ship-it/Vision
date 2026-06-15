@@ -71,7 +71,7 @@ function QuestCard({ quest, isSelected, isLocked, onToggle, isLast }) {
 }
 
 // ── Goal group — header + indented quest rows, mb-8 spacing ──────────────────
-function GoalGroup({ goal, isLocked, activeSprint, onToggle }) {
+function GoalGroup({ goal, isLocked, activeSprint, onToggle, onDelete }) {
   const selectedCount = goal.quests.filter(q => activeSprint.selectedQuestIds.includes(q.id)).length;
   const hasSelection = selectedCount > 0;
 
@@ -104,7 +104,6 @@ function GoalGroup({ goal, isLocked, activeSprint, onToggle }) {
             {selectedCount}/{goal.quests.length}
           </span>
         )}
-        {/* EP Badge — bg-[#39FF14]/10 text-[#39FF14] px-2 py-0.5 rounded text-[10px] */}
         <span style={{
           background: 'rgba(57,255,20,0.1)',
           color: '#39FF14',
@@ -116,6 +115,21 @@ function GoalGroup({ goal, isLocked, activeSprint, onToggle }) {
         }}>
           {goal.epCost}EP
         </span>
+        {goal.isCustom && onDelete && (
+          <button
+            onClick={() => { boop(); onDelete(goal.id); }}
+            title="Delete custom goal"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'rgba(255,255,255,0.2)', fontSize: 15, lineHeight: 1,
+              padding: '1px 3px', borderRadius: 3, flexShrink: 0,
+            }}
+            onMouseOver={e => { e.currentTarget.style.color = '#FF3B30'; }}
+            onMouseOut={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.2)'; }}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Quest rows */}
@@ -239,7 +253,7 @@ function CustomQuestForm({ floorId, roomId, onAdd, onClose }) {
           required
           style={{
             background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.12)',
-            color: '#fff', fontFamily: 'system-ui, sans-serif', fontSize: 13, outline: 'none', padding: '4px 0', width: '100%',
+            color: '#fff', fontFamily: 'system-ui, sans-serif', outline: 'none', padding: '4px 0', width: '100%',
           }}
         />
         <div className="flex gap-2 mt-3">
@@ -276,6 +290,7 @@ function RoomSection({ floor, room, forceOpen }) {
 
   const handleToggle = (questId) => dispatch({ type: 'TOGGLE_SPRINT_QUEST', questId });
   const handleAddCustom = (fId, rId, goal) => dispatch({ type: 'ADD_CUSTOM_GOAL', floorId: fId, roomId: rId, goal });
+  const handleDeleteCustomGoal = (goalId) => dispatch({ type: 'DELETE_CUSTOM_GOAL', floorId: floor.id, roomId: room.id, goalId });
 
   return (
     <div>
@@ -323,6 +338,7 @@ function RoomSection({ floor, room, forceOpen }) {
                 isLocked={room.locked}
                 activeSprint={activeSprint}
                 onToggle={handleToggle}
+                onDelete={handleDeleteCustomGoal}
               />
             ))}
 

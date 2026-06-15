@@ -39,7 +39,7 @@ function AddFocusForm({ onClose }) {
         style={{
           flex: 1, background: 'transparent', border: 'none',
           borderBottom: '1px solid rgba(57,255,20,0.3)', color: '#39FF14',
-          fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700,
+          fontFamily: 'Space Mono, monospace', fontWeight: 700,
           letterSpacing: '0.06em', outline: 'none', padding: '2px 0',
         }}
       />
@@ -95,7 +95,7 @@ function AddCustomQuestForm({ focusId, onClose }) {
         required
         style={{
           background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.12)',
-          color: '#fff', fontFamily: 'system-ui, sans-serif', fontSize: 13, outline: 'none',
+          color: '#fff', fontFamily: 'system-ui, sans-serif', outline: 'none',
           padding: '4px 0', width: '100%',
         }}
       />

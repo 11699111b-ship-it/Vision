@@ -452,6 +452,27 @@ export function reducer(state, action) {
       };
     }
 
+    case 'DELETE_CUSTOM_GOAL': {
+      const { floorId, roomId, goalId } = action;
+      const nb = JSON.parse(JSON.stringify(state.blueprint));
+      const floor = nb.floors.find(f => f.id === floorId);
+      const room = floor?.rooms.find(r => r.id === roomId);
+      if (!room) return state;
+      const goal = (room.customGoals || []).find(g => g.id === goalId);
+      const removedQuestIds = (goal?.quests || []).map(q => q.id);
+      room.customGoals = (room.customGoals || []).filter(g => g.id !== goalId);
+      return {
+        ...state,
+        blueprint: nb,
+        activeSprint: {
+          ...state.activeSprint,
+          selectedQuestIds: state.activeSprint.selectedQuestIds.filter(id => !removedQuestIds.includes(id)),
+          completedTodayIds: state.activeSprint.completedTodayIds.filter(id => !removedQuestIds.includes(id)),
+          completedWeeklyIds: state.activeSprint.completedWeeklyIds.filter(id => !removedQuestIds.includes(id)),
+        },
+      };
+    }
+
     case 'ADD_FOCUS': {
       const newFocus = {
         id: 'focus-' + Date.now(),
