@@ -2,11 +2,11 @@
 
 ## Product Vision
 
-A personal gamified productivity system that maps life goals across 6 domains onto floors of a virtual building. Each week, the user (Boss Anurag) selects a subset of quests within a 20 EP budget, launches a "mission," and tracks daily/weekly completion. Results are logged to Google Sheets for long-term trend analysis.
+A personal gamified productivity system that maps life goals across 6 domains onto floors of a virtual building. Each week, the user (Anurag) selects a subset of quests within a 20 EP budget, launches a "mission," and tracks daily/weekly completion. Results are logged to Google Sheets for long-term trend analysis.
 
 ## User
 
-Single user: Anurag. The app is personalized — hero names, mascot dialogue, and sprint messaging reference "Boss Anurag" directly.
+Single user: Anurag. The app is personalized — hero names, mascot dialogue, and sprint messaging reference "Anurag" directly.
 
 ## Core Concepts
 
@@ -34,7 +34,20 @@ Each room contains multiple **Goals** (e.g., "Overall Body Mastery"). Each goal 
 Selecting a quest costs the EP of its parent goal. The system prevents exceeding 20 EP.
 
 ### Custom Goals
-Users can create custom goals within any unlocked room. Custom goals get a unique ID (`{roomId}-custom-{timestamp}`), user-chosen frequency, and tag (which determines EP cost). Custom goals persist in the blueprint's `customGoals` array per room and sync to GAS.
+Users can create custom goals within any unlocked room. Custom goals get a unique ID (`{roomId}-custom-{timestamp}`), user-chosen frequency, and tag (which determines EP cost). Custom goals persist in the blueprint's `customGoals` array per room and sync to GAS. They can be deleted via the × button in the All Floors blueprint section (`DELETE_CUSTOM_GOAL`) — deleting also removes the goal's quests from the active sprint selection and completion lists.
+
+### Focus Mode
+A user-defined grouping layer that sits above the blueprint, letting Anurag organize the week around a few real-life focus areas (e.g. BODY, JOB, SITE) instead of navigating the full 6-floor tree.
+
+- **Focus cards** (`focusItems[]`): each has a name, `linkedQuestIds[]` (blueprint quests mapped into the focus), and `customQuests[]` (quests that live only inside the focus, not in the blueprint).
+- **Quest Mapper** (`QuestMapperOverlay`): full-screen, mobile-optimized overlay to browse the blueprint (with `QuestFilterBar` search) and toggle which blueprint quests are linked into a focus. Toggling here edits `linkedQuestIds`, not the sprint selection.
+- **Selecting quests**: tapping a quest row inside a focus card toggles it into the active sprint (`TOGGLE_SPRINT_QUEST`, EP budget enforced). The card header shows `selected/total`.
+- **Focus custom quests**: added inline per focus. They synthesize a goal/room/floor entry in `buildQuestLookup` (floor id `focus`, number 99) so EP, selection, and Goals Tracker logic treat them identically to blueprint quests. Their goal id contains `custom`, so they log as `RoomName(custom goal)`.
+- **Persistence**: `focusItems` is part of saved state (localStorage + GAS). The loader never lets an empty incoming `focusItems` overwrite a populated one, so mappings survive cross-device sync (see Data Persistence).
+- **Reducer actions**: `ADD_FOCUS`, `DELETE_FOCUS`, `TOGGLE_QUEST_IN_FOCUS`, `ADD_FOCUS_CUSTOM_QUEST`, `DELETE_FOCUS_CUSTOM_QUEST`.
+
+### Collapsible Sections
+Focus Mode, the All Floors blueprint, and each individual focus card can be collapsed/expanded. State is persisted per-section in localStorage (`superhero_hq_collapse`) via the `usePersistentCollapse(id, defaultOpen)` hook, so the layout survives reloads. Focus-card keys are `focus-card-{focusId}`.
 
 ### Smart Loadouts
 Preset quest bundles for quick selection:
@@ -82,7 +95,7 @@ Full-screen entry with background image, scan-line animation, title "SUPERHERO H
 ### Planning Mode (Desktop: Split | Mobile: Full)
 - **Top bar**: HQ title, HeroTag (level + XP), EP count, StreakBadge (flame + count), MusicBtn
 - **Left panel (desktop only)**: Building facade visualization. Floors glow green when they have active quests. Shows selected tasks receipt grouped by goal with X buttons to unselect.
-- **Right panel (full on mobile)**: CommandCenter — smart loadouts, EP budget bar, floor > room > goal > quest accordion, custom quest form, LAUNCH MISSION button. Mobile receipt bar at bottom with X buttons to unselect quests.
+- **Right panel (full on mobile)**: CommandCenter — smart loadouts, EP budget bar, collapsible **Focus Mode** panel (focus cards + quest mapper), collapsible **All Floors** blueprint accordion (floor > room > goal > quest, with custom quest form and delete buttons for custom goals), LAUNCH MISSION button. The Focus Mode panel and blueprint live inside the same scroll area so the Launch button stays reachable. Mobile receipt bar at bottom with X buttons to unselect quests.
 
 ### Tracking Mode
 - **Top bar**: VISIT HQ button, "ACTIVE PROTOCOL" title, StreakBadge, MusicBtn
@@ -103,10 +116,18 @@ Floating bot icon (bottom-right, above safe area). Expands to show contextual ch
 ## Data Persistence
 
 ### localStorage (Primary)
-Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change. Provides instant load on same device.
+Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change. Provides instant load on same device. Every save stamps `lastSavedAt` (epoch ms) for cross-device arbitration. Collapse state is stored separately under `superhero_hq_collapse`.
+
+### Cross-Device Sync Arbitration
+On load, localStorage is read first (instant), then GAS is fetched in the background. Which one wins is decided by `lastSavedAt`:
+- **No local data** → use GAS.
+- **Local data with a timestamp** → use GAS only if `gasTimestamp > localTimestamp`.
+- **Local data without a timestamp** (pre-`lastSavedAt` format) → keep local, skip GAS, to avoid stale cross-device overwrites.
+
+Additionally, `LOAD_STATE` never replaces a populated `focusItems` with an empty one — if an incoming payload (e.g. an old GAS save) has `focusItems: []` but current state has focus cards, the current cards are kept. These two guards together prevent focus mappings from being silently wiped on sync.
 
 ### Google Apps Script (Cross-device backup)
-- **GET**: Returns state JSON from Sheet "State" cell A1. Used when no localStorage exists (new device).
+- **GET**: Returns state JSON from Sheet "State" cell A1. Used when no localStorage exists (new device) or when GAS is newer (see arbitration above).
 - **POST (state)**: Debounced 3s. Sends lightweight payload — full blueprint replaced with just `_customGoals` array (~2KB vs ~78KB).
 - **POST (log)**: On sprint submit. Appends to "WeeklyLogs" sheet.
 - **POST (log_goals)**: On mission launch. Appends row to "Weekly Goals" sheet with S.no + goal names (Week and Completion % left blank).
@@ -156,7 +177,13 @@ Key: `superhero_hq_v2`. Full state JSON. Immediate writes on every state change.
 
 ## Non-Functional Requirements
 
-- **PWA**: Installable on iOS/Android home screen. Service worker for offline caching.
-- **Mobile-first**: Safe area insets for notch/Dynamic Island. 100dvh for mobile browser chrome. Touch-friendly 44px+ targets.
+- **PWA**: Installable on iOS/Android home screen. Service worker for offline caching (stale-while-revalidate).
+- **Local Notifications** (`sw.js`): three IST-accurate scheduled reminders, computed entirely in UTC so device timezone is irrelevant:
+  - **9:00 AM IST daily** — "Watch Your Goals"
+  - **10:00 PM IST daily** — "Update Daily Tasks"
+  - **Sunday 8:00 PM IST** — "Submit Your Mission" (sprint deadline warning)
+
+  Scheduled via `setTimeout` in the service worker. Note: SW timers are unreliable when the PWA is fully backgrounded on iOS — a server-driven Web Push path (`push` event handler) exists as a fallback but is not yet wired to a push server.
+- **Mobile-first**: Safe area insets for notch/Dynamic Island. 100dvh for mobile browser chrome. Touch-friendly 44px+ targets. All inputs use `font-size: 16px !important` to prevent iOS Safari zoom-on-focus.
 - **Performance**: No external API calls during normal use (localStorage is primary). GAS calls are fire-and-forget with `.catch(() => {})`.
 - **Single user**: No auth, no multi-tenancy. State is per-device via localStorage, cross-device via shared GAS sheet.

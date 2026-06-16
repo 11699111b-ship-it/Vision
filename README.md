@@ -17,7 +17,7 @@ frontend/
   public/
     index.html          # viewport-fit=cover, apple-mobile-web-app meta, PWA manifest link
     manifest.json       # PWA manifest — standalone, portrait, dark theme
-    sw.js               # Service worker — caching + daily reset notification scheduling
+    sw.js               # Service worker — stale-while-revalidate caching + IST notification scheduling (9AM, 10PM daily; Sun 8PM) + Web Push handler
   src/
     App.js              # Root — wraps AppProvider > MusicProvider > AppContent
     App.css             # Minimal overrides (button transitions, motion-page)
@@ -34,7 +34,10 @@ frontend/
     components/
       WelcomeScreen.jsx  # Entry screen — background image, scan-line animation, ENTER button
       PlanningMode.jsx   # Split layout: Building (desktop left) + CommandCenter (right/full mobile). Top bar: HeroTag, EP, StreakBadge, MusicBtn. Desktop receipt has X buttons to unselect quests.
-      CommandCenter.jsx  # Quest selection UI — floor/room accordions, EP budget, loadouts, launch button, custom quest form. Mobile receipt bar with X buttons to unselect quests.
+      CommandCenter.jsx  # Quest selection UI — loadouts, EP budget, FocusModePanel + All Floors accordion (both in one scroll area), launch button, custom quest form + delete buttons for custom goals. Mobile receipt bar with X buttons to unselect quests.
+      FocusModePanel.jsx # Focus Mode — collapsible panel of focus cards (BODY/JOB/SITE...). Each card: collapsible, lists mapped + custom quests, tap to select into sprint, "map quests"/"add custom" actions, delete buttons.
+      QuestMapperOverlay.jsx # Full-screen mobile-optimized overlay to map blueprint quests into a focus (edits linkedQuestIds). Uses QuestFilterBar for search. 44px touch targets, safe-area insets.
+      QuestFilterBar.jsx # Search/filter input + filterFloors() helper for narrowing the blueprint tree in the mapper.
       TrackingMode.jsx   # Active sprint — progress ring, streak counter, daily/weekly task cards, submit button, confetti overlay. Top bar: StreakBadge, MusicBtn
       HQVisitMode.jsx    # Building inspection view + return button. Top bar: StreakBadge, MusicBtn
       Building.jsx       # Visual building facade — 6 floors of window panes that glow green when active
@@ -43,6 +46,7 @@ frontend/
 
     hooks/
       usePWA.js          # Service worker registration + notification permission request
+      usePersistentCollapse.js # Per-section open/closed state persisted in localStorage (superhero_hq_collapse)
       use-toast.js       # Sonner toast hook (shadcn pattern)
 
     utils/
@@ -107,6 +111,10 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
   avgCompletion: number,    // running average across all sprints
   sprintCount: number,
   lastSprintQuestIds: [],   // for "REPEAT LAST WEEK" loadout
+  focusItems: [             // Focus Mode groupings (see Focus Mode below)
+    { id, name, linkedQuestIds: [], customQuests: [{ id, text, frequency, tag, epCost }] }
+  ],
+  lastSavedAt: number,      // epoch ms of last save — drives cross-device sync arbitration
 }
 ```
 
@@ -122,13 +130,18 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 | `AUTO_SUBMIT_SPRINT` | Fires at IST Sunday 23:59 if sprint is still active |
 | `DAILY_RESET` | IST 3AM — records daily score to `dailyCompletionHistory`, clears daily completions, updates streak (90% threshold)/buffers |
 | `ADD_CUSTOM_GOAL` | Add user-defined goal+quest to a room |
+| `DELETE_CUSTOM_GOAL` | Remove a custom goal from a room + drop its quests from sprint/completion lists |
 | `LOAD_LOADOUT` | Bulk-set selectedQuestIds from a preset |
 | `RESET_SPRINT` | Clear all selections |
+| `ADD_FOCUS` / `DELETE_FOCUS` | Create / remove a Focus Mode card (delete also unselects its custom quests) |
+| `TOGGLE_QUEST_IN_FOCUS` | Link/unlink a blueprint quest into a focus (`linkedQuestIds`) |
+| `ADD_FOCUS_CUSTOM_QUEST` / `DELETE_FOCUS_CUSTOM_QUEST` | Add/remove a focus-only custom quest (auto-selects into sprint if EP fits) |
 
 ### Persistence
-- **localStorage** (`superhero_hq_v2`): Full state saved immediately on every change.
+- **localStorage** (`superhero_hq_v2`): Full state saved immediately on every change. Each save stamps `lastSavedAt`. Collapse state stored separately (`superhero_hq_collapse`).
 - **GAS POST**: Debounced 3s. Sends lightweight payload (blueprint replaced with just customGoals ~2KB).
-- **GAS GET**: Used on first load if no localStorage (new device).
+- **GAS GET**: Fetched on every load. Used only if no local data, or `gasTimestamp > localTimestamp`. If local data predates `lastSavedAt` (no timestamp), local wins and GAS is skipped.
+- **focusItems guard**: `LOAD_STATE` keeps existing focus cards rather than overwriting them with an empty incoming `focusItems` — prevents stale cross-device saves from wiping focus mappings.
 
 ## Google Apps Script Integration
 
@@ -165,7 +178,8 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 - `viewport-fit=cover` + `black-translucent` status bar for iOS notch support.
 - `.safe-top` / `.safe-bottom` CSS classes use `env(safe-area-inset-*)`.
 - Heights use `100dvh` (dynamic viewport height) to handle mobile browser chrome.
-- Service worker handles caching and daily reset notification scheduling.
+- All inputs forced to `font-size: 16px !important` to stop iOS Safari zooming on focus.
+- Service worker handles stale-while-revalidate caching and IST-accurate local notifications: **9 AM** ("Watch Your Goals") and **10 PM** ("Update Daily Tasks") daily, plus **Sunday 8 PM** ("Submit Your Mission"). A `push` handler exists for future server-driven Web Push (SW `setTimeout` is unreliable when iOS fully backgrounds the PWA).
 
 ## Time Engine (istUtils.js)
 

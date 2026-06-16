@@ -142,7 +142,10 @@ export function reducer(state, action) {
         avgCompletion: p.avgCompletion ?? 0,
         sprintCount: p.sprintCount ?? 0,
         lastSprintQuestIds: p.lastSprintQuestIds ?? [],
-        focusItems: p.focusItems ?? [],
+        // Prefer whichever has more focus data. GAS data can arrive with focusItems:[]
+        // (old save from another device before mappings existed) and would silently
+        // wipe all linkedQuestIds. If the payload has nothing, keep current state.
+        focusItems: (p.focusItems?.length > 0) ? p.focusItems : state.focusItems,
         lastSavedAt: p.lastSavedAt ?? null,
       };
     }
@@ -607,6 +610,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const load = async () => {
       let localTimestamp = 0;
+      let hadLocalData = false;
 
       // 1a. Load localStorage immediately (fast, offline-resilient)
       try {
@@ -615,13 +619,16 @@ export function AppProvider({ children }) {
         if (raw && hasEntered) {
           const parsed = JSON.parse(raw);
           localTimestamp = parsed.lastSavedAt || 0;
+          hadLocalData = true;
           dispatch({ type: 'LOAD_STATE', payload: parsed });
           setIsLoading(false);
           // Don't return — still check GAS for newer state from another device
         }
       } catch { /* ignore */ }
 
-      // 1b. Fetch GAS — use if no local data, or GAS was saved more recently
+      // 1b. Fetch GAS — use only when GAS is strictly newer than local data.
+      // If local exists but has no timestamp (pre-lastSavedAt format), skip GAS
+      // to avoid blindly overwriting with stale cross-device data.
       try {
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 8000);
@@ -630,7 +637,10 @@ export function AppProvider({ children }) {
         const data = await res.json();
         if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
           const gasTimestamp = data.lastSavedAt || 0;
-          if (gasTimestamp > localTimestamp) {
+          // Use GAS when: no local data at all, OR GAS timestamp is strictly newer.
+          // Skip GAS if local exists but has no timestamp (old format) — local wins.
+          const useGAS = !hadLocalData || (localTimestamp > 0 && gasTimestamp > localTimestamp);
+          if (useGAS) {
             dispatch({ type: 'LOAD_STATE', payload: data });
           }
         }
