@@ -83,7 +83,7 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 | Big Missions | 4 |
 | Locked | 0 (disabled) |
 
-**Budget**: 20 EP max per sprint. Floor 0+1 EP tracked separately via `calcFloor01EP`.
+**Budget**: 30 EP max per sprint. Floor 0+1 EP tracked separately via `calcFloor01EP`.
 
 ### Quest Frequencies
 - **Daily**: Reset at IST 3:00 AM (`completedTodayIds` cleared). Must be re-checked each day.
@@ -166,7 +166,7 @@ Custom goals: `{floorId}-r{roomKey}-custom-{timestamp}-q0`
 
 ## Sprint Lifecycle
 
-1. **Planning** → User selects quests (or loads a preset). EP budget enforced (max 20).
+1. **Planning** → User selects quests (or loads a preset). EP budget enforced (max 30).
 2. **Launch** → `sprintStartDate` set. Goal names logged to "Weekly Goals" sheet (Phase 1). View switches to Tracking.
 3. **Tracking** → User checks off daily tasks (reset at IST 3AM) and weekly tasks (persist).
 4. **Submit** → User clicks "END & SUBMIT" or auto-submit fires at IST Sunday 23:59. Completion % + Week filled in "Weekly Goals" (Phase 2).

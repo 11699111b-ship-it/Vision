@@ -94,19 +94,21 @@ function SectionHeader({ label, done, total }) {
 
 // ── Task card ─────────────────────────────────────────────────────────────────
 // Goal name (bold, top) as context header; specific quest action (muted) below
-function TaskCard({ quest, goal, isCompleted, onToggle }) {
+function TaskCard({ quest, goal, isCompleted, onToggle, locked }) {
   return (
     <motion.div
       data-testid={`task-card-${quest.id}`}
-      className="flex items-center gap-3 p-3 mb-2 cursor-pointer"
+      className={`flex items-center gap-3 p-3 mb-2 ${locked ? '' : 'cursor-pointer'}`}
       style={{
         background: '#161616',
         borderRadius: 12,
         border: `1px solid ${isCompleted ? 'rgba(57,255,20,0.4)' : 'rgba(255,255,255,0.06)'}`,
         transition: 'border-color 0.2s',
+        opacity: locked ? 0.65 : 1,
+        cursor: locked ? 'not-allowed' : 'pointer',
       }}
-      whileTap={{ scale: 0.98 }}
-      onClick={() => { boop(); onToggle(quest.id); }}
+      whileTap={locked ? undefined : { scale: 0.98 }}
+      onClick={() => { if (locked) return; boop(); onToggle(quest.id); }}
     >
       {/* Status dot */}
       <div style={{
@@ -162,7 +164,7 @@ function TaskCard({ quest, goal, isCompleted, onToggle }) {
 }
 
 // ── Submission overlay ────────────────────────────────────────────────────────
-function SubmissionOverlay({ result, onClose }) {
+function SubmissionOverlay({ result, onClose, title = 'WEEKLY MISSION COMPLETE', buttonText = 'RETURN TO HQ', isDaily = false }) {
   const { percentage, isPerfect } = result;
   const w = typeof window !== 'undefined' ? window.innerWidth : 800;
   const h = typeof window !== 'undefined' ? window.innerHeight : 600;
@@ -173,11 +175,17 @@ function SubmissionOverlay({ result, onClose }) {
     : percentage >= 50
       ? 'SOLID EFFORT'
       : 'RESET & CONQUER';
-  const sub = percentage === 100
-    ? 'Perfect week, Anurag. You leveled up!'
-    : percentage >= 50
-      ? 'Almost there. Keep pushing, Anurag.'
-      : 'Rough week, but we kept the lights on.';
+  const sub = isDaily
+    ? (percentage === 100
+        ? 'Perfect day, Anurag. Keep the streak alive!'
+        : percentage >= 50
+          ? 'Solid day. Tomorrow we go again, Anurag.'
+          : 'Tough day. Reset and conquer tomorrow.')
+    : (percentage === 100
+        ? 'Perfect week, Anurag. You leveled up!'
+        : percentage >= 50
+          ? 'Almost there. Keep pushing, Anurag.'
+          : 'Rough week, but we kept the lights on.');
 
   return (
     <motion.div
@@ -194,7 +202,7 @@ function SubmissionOverlay({ result, onClose }) {
         initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.15, type: 'spring', stiffness: 120 }}
       >
         <p className="font-orbitron mb-2" style={{ fontSize: 11, color: accent, letterSpacing: '0.2em' }}>
-          WEEKLY MISSION COMPLETE
+          {title}
         </p>
         <p style={{
           fontSize: 72, fontWeight: 900, color: accent, lineHeight: 1, margin: '8px 0 16px',
@@ -219,7 +227,7 @@ function SubmissionOverlay({ result, onClose }) {
           }}
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
         >
-          RETURN TO HQ
+          {buttonText}
         </motion.button>
       </motion.div>
     </motion.div>
@@ -228,7 +236,7 @@ function SubmissionOverlay({ result, onClose }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function TrackingMode() {
-  const { activeSprint, questLookup, dailyProgress, streak, buffers, dispatch, submissionResult } = useAppContext();
+  const { activeSprint, questLookup, dailyProgress, streak, buffers, dispatch, submissionResult, dailySubmissionResult, dailyLocked } = useAppContext();
   const { selectedQuestIds, completedTodayIds, completedWeeklyIds } = activeSprint;
 
   const dailyTasks = useMemo(() => selectedQuestIds.filter(id => questLookup[id]?.quest.frequency === 'Daily'), [selectedQuestIds, questLookup]);
@@ -248,6 +256,11 @@ export default function TrackingMode() {
       else { playLowPitch(); }
     }
     dispatch({ type: 'SUBMIT_MISSION' });
+  };
+
+  const handleDailySubmit = () => {
+    boop();
+    dispatch({ type: 'DAILY_SUBMIT' });
   };
 
   return (
@@ -343,6 +356,7 @@ export default function TrackingMode() {
                   goal={entry.goal}
                   isCompleted={completedTodayIds.includes(questId)}
                   onToggle={handleToggle}
+                  locked={dailyLocked}
                 />
               );
             })}
@@ -378,8 +392,28 @@ export default function TrackingMode() {
         <div style={{ height: 100 }} />
       </div>
 
-      {/* Submit button */}
+      {/* Submit buttons */}
       <div className="px-5 pb-5 pt-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <motion.button
+          data-testid="daily-submit-btn"
+          onClick={dailyLocked ? undefined : handleDailySubmit}
+          disabled={dailyLocked}
+          className="w-full flex items-center justify-center gap-3 py-4 font-orbitron font-black mb-3"
+          style={{
+            background: dailyLocked ? 'rgba(57,255,20,0.06)' : 'transparent',
+            border: '1.5px solid rgba(57,255,20,0.25)',
+            borderRadius: 12,
+            color: dailyLocked ? 'rgba(57,255,20,0.5)' : '#39FF14',
+            fontSize: 12,
+            letterSpacing: '0.2em',
+            cursor: dailyLocked ? 'not-allowed' : 'pointer',
+          }}
+          whileHover={dailyLocked ? undefined : { borderColor: '#39FF14', background: 'rgba(57,255,20,0.08)' }}
+          whileTap={dailyLocked ? undefined : { scale: 0.97 }}
+        >
+          <Check size={14} />
+          {dailyLocked ? 'DAILY SUBMITTED' : 'DAILY SUBMIT'}
+        </motion.button>
         <motion.button
           data-testid="submit-mission-btn"
           onClick={handleSubmit}
@@ -401,10 +435,19 @@ export default function TrackingMode() {
         </motion.button>
       </div>
 
-      {/* Submission overlay */}
+      {/* Submission overlays */}
       <AnimatePresence>
         {submissionResult && (
           <SubmissionOverlay result={submissionResult} onClose={() => dispatch({ type: 'CLEAR_SUBMISSION' })} />
+        )}
+        {dailySubmissionResult && !submissionResult && (
+          <SubmissionOverlay
+            result={dailySubmissionResult}
+            onClose={() => dispatch({ type: 'CLEAR_DAILY_SUBMISSION' })}
+            title="DAILY MISSION COMPLETE"
+            buttonText="CONTINUE"
+            isDaily
+          />
         )}
       </AnimatePresence>
     </motion.div>

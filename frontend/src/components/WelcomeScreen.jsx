@@ -125,7 +125,7 @@ export default function WelcomeScreen() {
         )}
 
         <motion.div className="flex items-center justify-center gap-6 mt-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6 }}>
-          {['6 FLOORS', '20 EP BUDGET', '100+ QUESTS'].map((label) => (
+          {['6 FLOORS', '30 EP BUDGET', '100+ QUESTS'].map((label) => (
             <div key={label} className="text-center">
               <div className="text-xs font-orbitron tracking-widest" style={{ color: '#8B8B8D' }}>{label}</div>
             </div>

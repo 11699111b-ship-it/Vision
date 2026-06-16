@@ -5,7 +5,7 @@ import { getISTDate, getISTHour, isSprintExpired, formatWeekRange } from '../uti
 const STORAGE_KEY = 'superhero_hq_v2';
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzyZTaQOLvFsmD1DCZbKgYtbzHOXi4iA8gMFEI4yV9N6Vr5pTlPOAwR_NM-L_w_nTtF/exec';
 
-export const MAX_EP = 20;
+export const MAX_EP = 30;
 export const UPKEEP_MIN_EP = 5;
 
 export function buildQuestLookup(blueprint, focusItems = []) {
@@ -73,6 +73,11 @@ function mergeBlueprint(initial, saved) {
   return merged;
 }
 
+// Current IST calendar date as 'YYYY-MM-DD' (matches DAILY_SUBMIT / getISTDate keying)
+function istTodayStr() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).toLocaleDateString('en-CA');
+}
+
 const initialState = {
   appView: 'welcome',
   xp: 0,
@@ -80,6 +85,7 @@ const initialState = {
   buffers: 2,
   lastResetDate: null,
   lastBufferResetMonth: null,
+  dailyFinalizedDate: null,
   blueprint: JSON.parse(JSON.stringify(INITIAL_BLUEPRINT)),
   activeSprint: {
     selectedQuestIds: [],
@@ -94,6 +100,7 @@ const initialState = {
   sprintCount: 0,
   launchError: null,
   submissionResult: null,
+  dailySubmissionResult: null,
   lastSprintQuestIds: [],
   autoSubmittedMessage: null,
   focusItems: [],
@@ -136,6 +143,7 @@ export function reducer(state, action) {
         buffers: p.buffers ?? 2,
         lastResetDate: p.lastResetDate ?? null,
         lastBufferResetMonth: p.lastBufferResetMonth ?? null,
+        dailyFinalizedDate: p.dailyFinalizedDate ?? null,
         blueprint: bp,
         activeSprint: sprint,
         appView: view,
@@ -175,6 +183,8 @@ export function reducer(state, action) {
       if (!entry) return state;
       const isDaily = entry.quest.frequency === 'Daily';
       if (isDaily) {
+        // Day already finalized via Daily Submit — daily tasks are locked until midnight reset
+        if (state.dailyFinalizedDate === istTodayStr()) return state;
         const done = activeSprint.completedTodayIds.includes(questId);
         return { ...state, activeSprint: { ...activeSprint, completedTodayIds: done ? activeSprint.completedTodayIds.filter(id => id !== questId) : [...activeSprint.completedTodayIds, questId] } };
       } else {
@@ -203,6 +213,7 @@ export function reducer(state, action) {
         ...state,
         appView: 'tracking',
         launchError: null,
+        dailyFinalizedDate: null, // fresh mission — Daily Submit available again (even same day)
         activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() },
         _pendingGoalLog: { goalNames },
         _pendingTrackerLaunch: { quests: trackerQuests },
@@ -225,16 +236,21 @@ export function reducer(state, action) {
       if (total === 0) return {
         ...state,
         appView: 'planning',
+        dailyFinalizedDate: null,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
       };
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
       const nonDailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency !== 'Daily');
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
 
-      // Include today's daily score in history, then average all days
+      // Include today's daily score in history, then average all days.
+      // If today was already finalized via Daily Submit, it's already in history — don't add it twice.
+      const finalizedToday = state.dailyFinalizedDate === istTodayStr();
       const todayDailyDone = dailyIds.filter(id => completedTodayIds.includes(id)).length;
       const todayScore = dailyIds.length > 0 ? todayDailyDone / dailyIds.length : 1;
-      const allDailyScores = [...(dailyCompletionHistory || []), todayScore];
+      const allDailyScores = finalizedToday
+        ? [...(dailyCompletionHistory || [])]
+        : [...(dailyCompletionHistory || []), todayScore];
       const avgDailyPct = allDailyScores.length > 0
         ? allDailyScores.reduce((s, v) => s + v, 0) / allDailyScores.length
         : 1;
@@ -251,26 +267,29 @@ export function reducer(state, action) {
         let questPct;
         if (entry.quest.frequency === 'Daily') {
           const prevCount = (activeSprint.questDailyCompletionCounts || {})[id] || 0;
-          const todayDone = completedTodayIds.includes(id) ? 1 : 0;
+          const todayDone = finalizedToday ? 0 : (completedTodayIds.includes(id) ? 1 : 0);
           const totalDays = allDailyScores.length;
           questPct = totalDays > 0 ? Math.round(((prevCount + todayDone) / totalDays) * 100) : 0;
         } else {
           questPct = completedWeeklyIds.includes(id) ? 100 : 0;
         }
-        return { mission: missionName, goal: entry.quest.text, percentage: questPct };
+        return { mission: missionName, goal: entry.quest.text, percentage: questPct, type: entry.quest.frequency === 'Daily' ? 'D' : 'W' };
       }).filter(Boolean);
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
       const newAvg = Math.round(((state.avgCompletion * state.sprintCount) + percentage) / newCount);
       const goalNames = selectedQuestIds.map(id => lookup[id]?.quest.text).filter(Boolean);
+      const weekRange = formatWeekRange(activeSprint.sprintStartDate);
       return {
         ...state,
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
+        dailyFinalizedDate: null,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
+        _pendingWeeklyReport: { week: weekRange, percentage, xpEarned: isPerfect ? 1 : 0, daysLogged: allDailyScores.length, quests: trackerQuests },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
       };
@@ -286,6 +305,7 @@ export function reducer(state, action) {
           ...state,
           appView: 'planning',
           autoSubmittedMessage: 'Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
+          dailyFinalizedDate: null,
           activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         };
       }
@@ -293,10 +313,14 @@ export function reducer(state, action) {
       const nonDailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency !== 'Daily');
       const completedW = nonDailyIds.filter(id => completedWeeklyIds.includes(id)).length;
 
-      // Include today's daily score in history, then average all days
+      // Include today's daily score in history, then average all days.
+      // If today was already finalized via Daily Submit, it's already in history — don't add it twice.
+      const finalizedToday = state.dailyFinalizedDate === istTodayStr();
       const todayDailyDone = dailyIds.filter(id => completedTodayIds.includes(id)).length;
       const todayScore = dailyIds.length > 0 ? todayDailyDone / dailyIds.length : 1;
-      const allDailyScores = [...(dailyCompletionHistory || []), todayScore];
+      const allDailyScores = finalizedToday
+        ? [...(dailyCompletionHistory || [])]
+        : [...(dailyCompletionHistory || []), todayScore];
       const avgDailyPct = allDailyScores.length > 0
         ? allDailyScores.reduce((s, v) => s + v, 0) / allDailyScores.length
         : 1;
@@ -312,13 +336,13 @@ export function reducer(state, action) {
         let questPct;
         if (entry.quest.frequency === 'Daily') {
           const prevCount = (activeSprint.questDailyCompletionCounts || {})[id] || 0;
-          const todayDone = completedTodayIds.includes(id) ? 1 : 0;
+          const todayDone = finalizedToday ? 0 : (completedTodayIds.includes(id) ? 1 : 0);
           const totalDays = allDailyScores.length;
           questPct = totalDays > 0 ? Math.round(((prevCount + todayDone) / totalDays) * 100) : 0;
         } else {
           questPct = completedWeeklyIds.includes(id) ? 100 : 0;
         }
-        return { mission: missionName, goal: entry.quest.text, percentage: questPct };
+        return { mission: missionName, goal: entry.quest.text, percentage: questPct, type: entry.quest.frequency === 'Daily' ? 'D' : 'W' };
       }).filter(Boolean);
       const isPerfect = percentage === 100;
       const newCount = state.sprintCount + 1;
@@ -330,8 +354,10 @@ export function reducer(state, action) {
         sprintCount: newCount,
         avgCompletion: newAvg,
         autoSubmittedMessage: `Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
+        dailyFinalizedDate: null,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
+        _pendingWeeklyReport: { week: formatWeekRange(activeSprint.sprintStartDate), percentage, xpEarned: isPerfect ? 1 : 0, daysLogged: allDailyScores.length, quests: trackerQuests },
         lastSprintQuestIds: selectedQuestIds.length > 0 ? [...selectedQuestIds] : state.lastSprintQuestIds,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
         appView: 'planning',
@@ -341,11 +367,20 @@ export function reducer(state, action) {
     case '_CLEAR_LOG':
       return { ...state, _pendingLog: null };
 
+    case '_CLEAR_DAILY_REPORT':
+      return { ...state, _pendingDailyReport: null };
+
+    case '_CLEAR_WEEKLY_REPORT':
+      return { ...state, _pendingWeeklyReport: null };
+
     case 'CLEAR_AUTO_SUBMIT':
       return { ...state, autoSubmittedMessage: null };
 
     case 'CLEAR_SUBMISSION':
       return { ...state, appView: 'planning', submissionResult: null };
+
+    case 'CLEAR_DAILY_SUBMISSION':
+      return { ...state, dailySubmissionResult: null };
 
     case 'ADD_CUSTOM_GOAL': {
       const { floorId, roomId, goal } = action;
@@ -372,10 +407,32 @@ export function reducer(state, action) {
       return { ...state, blueprint: nb };
     }
 
-    // ── IST 3AM Daily Reset — ONLY resets Daily tasks (Weekly+ persist) ───────
+    // ── IST Midnight Daily Reset — ONLY resets Daily tasks (Weekly+ persist) ───
     case 'DAILY_RESET': {
       const { activeSprint, buffers, streak, lastBufferResetMonth } = state;
       const { completedTodayIds, selectedQuestIds } = activeSprint;
+
+      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const istDateStr = istNow.toLocaleDateString('en-CA');
+      const cm = istNow.getMonth() + 1;
+
+      // Guard: the finalized day's score is ALREADY in history (via Daily Submit / daily auto-submit),
+      // and daily tasks are locked while dailyFinalizedDate is set, so completedTodayIds can't have
+      // gained new entries. Discard those stale completions and do new-day housekeeping only —
+      // never re-append a score. (Truthy check, not "=== yesterday", so a skipped midnight from a
+      // multi-day app closure can't cause a double-count.)
+      if (state.dailyFinalizedDate) {
+        let nb = buffers;
+        if (lastBufferResetMonth !== cm && istNow.getDate() === 1) nb = 2;
+        return {
+          ...state,
+          buffers: Math.min(2, nb),
+          lastResetDate: istDateStr,
+          lastBufferResetMonth: cm,
+          dailyFinalizedDate: null,
+          activeSprint: { ...activeSprint, completedTodayIds: [] },
+        };
+      }
 
       // Only Daily-frequency tasks count for daily progress score
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
@@ -398,10 +455,7 @@ export function reducer(state, action) {
       if (yp >= 90) { ns = streak + 1; }
       else { if (nb > 0) { nb -= 1; } else { ns = 0; } }
 
-      // IST-based date + monthly buffer reset on 1st of month
-      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-      const istDateStr = istNow.toLocaleDateString('en-CA');
-      const cm = istNow.getMonth() + 1;
+      // monthly buffer reset on 1st of month
       if (lastBufferResetMonth !== cm && istNow.getDate() === 1) nb = 2;
 
       return {
@@ -410,8 +464,55 @@ export function reducer(state, action) {
         buffers: Math.min(2, nb),
         lastResetDate: istDateStr,
         lastBufferResetMonth: cm,
+        dailyFinalizedDate: null,
         // completedTodayIds cleared (Daily only) — completedWeeklyIds + dailyCompletionHistory preserved
         activeSprint: { ...activeSprint, completedTodayIds: [], yesterdayProgress: yp, dailyCompletionHistory: updatedHistory, questDailyCompletionCounts: updatedQuestCounts },
+      };
+    }
+
+    // ── Manual Daily Submit — finalize today early + queue WhatsApp daily report ─
+    case 'DAILY_SUBMIT': {
+      const { activeSprint, buffers, streak, lastBufferResetMonth } = state;
+      const { completedTodayIds, selectedQuestIds } = activeSprint;
+      if (!activeSprint.sprintStartDate) return state;
+
+      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const istDateStr = istNow.toLocaleDateString('en-CA');
+      const cm = istNow.getMonth() + 1;
+
+      // No-op if today was already finalized (prevents double-count on repeat taps)
+      if (state.dailyFinalizedDate === istDateStr) return state;
+
+      const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
+      const dailyDoneCount = completedTodayIds.filter(id => dailyIds.includes(id)).length;
+      const yp = dailyIds.length > 0 ? Math.round((dailyDoneCount / dailyIds.length) * 100) : 100;
+      const todayScore = dailyIds.length > 0 ? dailyDoneCount / dailyIds.length : 1;
+      const updatedHistory = [...(activeSprint.dailyCompletionHistory || []), todayScore];
+
+      const updatedQuestCounts = { ...(activeSprint.questDailyCompletionCounts || {}) };
+      dailyIds.forEach(id => {
+        if (!updatedQuestCounts[id]) updatedQuestCounts[id] = 0;
+        if (completedTodayIds.includes(id)) updatedQuestCounts[id]++;
+      });
+
+      let ns = streak, nb = buffers;
+      if (yp >= 90) { ns = streak + 1; }
+      else { if (nb > 0) { nb -= 1; } else { ns = 0; } }
+      if (lastBufferResetMonth !== cm && istNow.getDate() === 1) nb = 2;
+
+      const done = dailyIds.filter(id => completedTodayIds.includes(id)).map(id => lookup[id]?.quest.text).filter(Boolean);
+      const missed = dailyIds.filter(id => !completedTodayIds.includes(id)).map(id => lookup[id]?.quest.text).filter(Boolean);
+
+      return {
+        ...state,
+        streak: ns,
+        buffers: Math.min(2, nb),
+        lastBufferResetMonth: cm,
+        dailyFinalizedDate: istDateStr,
+        dailySubmissionResult: { percentage: yp, isPerfect: yp === 100 },
+        _pendingDailyReport: { date: istDateStr, pct: yp, done, missed },
+        // Keep completedTodayIds so the finalized day stays visible (locked) until the midnight reset clears it.
+        activeSprint: { ...activeSprint, yesterdayProgress: yp, dailyCompletionHistory: updatedHistory, questDailyCompletionCounts: updatedQuestCounts },
       };
     }
 
@@ -422,6 +523,7 @@ export function reducer(state, action) {
       return {
         ...state,
         launchError: null,
+        dailyFinalizedDate: null,
         activeSprint: {
           selectedQuestIds: [],
           completedTodayIds: [],
@@ -656,7 +758,7 @@ export function AppProvider({ children }) {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
-    const { appView, launchError, submissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, _pendingTrackerSubmit, ...toSave } = state;
+    const { appView, launchError, submissionResult, dailySubmissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, _pendingTrackerSubmit, _pendingDailyReport, _pendingWeeklyReport, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
     toSave.lastSavedAt = Date.now();
 
@@ -666,6 +768,16 @@ export function AppProvider({ children }) {
     // GAS — lightweight: replace full blueprint with just customGoals (~78KB → <2KB)
     const gasPayload = { ...toSave, _customGoals: extractCustomGoals(toSave.blueprint) };
     delete gasPayload.blueprint;
+
+    // Daily snapshot for the accountability "Daily Log" sheet (payload-only — not persisted to state/localStorage).
+    // Keeps today's row fresh on every save so the nightly GAS report works even if the app is closed at midnight.
+    if (state.activeSprint.sprintStartDate) {
+      const lk = buildQuestLookup(state.blueprint, state.focusItems);
+      const dIds = state.activeSprint.selectedQuestIds.filter(id => lk[id]?.quest.frequency === 'Daily');
+      const done = dIds.filter(id => state.activeSprint.completedTodayIds.includes(id)).map(id => lk[id]?.quest.text).filter(Boolean);
+      const missed = dIds.filter(id => !state.activeSprint.completedTodayIds.includes(id)).map(id => lk[id]?.quest.text).filter(Boolean);
+      gasPayload._daily = { date: getISTDate(), pct: dIds.length > 0 ? Math.round((done.length / dIds.length) * 100) : 0, done, missed };
+    }
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => saveToGAS(gasPayload), 3000);
   }, [state, isLoading]);
@@ -708,13 +820,29 @@ export function AppProvider({ children }) {
     dispatch({ type: '_CLEAR_TRACKER_SUBMIT' });
   }, [state._pendingTrackerSubmit]);
 
-  // ── 3. IST 3AM Daily Reset (checks every 60s, only resets Daily tasks) ──────
+  // ── 2f. Request a Daily WhatsApp report (manual Daily Submit) ─────────────────
+  useEffect(() => {
+    if (!state._pendingDailyReport) return;
+    postToGAS({ action: 'request_daily_report', ...state._pendingDailyReport });
+    dispatch({ type: '_CLEAR_DAILY_REPORT' });
+  }, [state._pendingDailyReport]);
+
+  // ── 2g. Immediate Weekly WhatsApp report on submit (race-safe: carries its data) ─
+  // Declared after the log/tracker effects so this POST fires last.
+  useEffect(() => {
+    if (!state._pendingWeeklyReport) return;
+    const { week, percentage, xpEarned, daysLogged, quests } = state._pendingWeeklyReport;
+    postToGAS({ action: 'send_weekly_report', week, percentage, xpEarned, daysLogged, quests });
+    dispatch({ type: '_CLEAR_WEEKLY_REPORT' });
+  }, [state._pendingWeeklyReport]);
+
+  // ── 3. IST Midnight Daily Reset (checks every 60s, only resets Daily tasks) ──
   useEffect(() => {
     const check = () => {
       if (!state.activeSprint.sprintStartDate) return;
       const istDate = getISTDate();
       const istHour = getISTHour();
-      if (istHour >= 3 && state.lastResetDate !== istDate) {
+      if (istHour >= 0 && state.lastResetDate !== istDate) {
         dispatch({ type: 'DAILY_RESET' });
       }
     };
@@ -723,7 +851,7 @@ export function AppProvider({ children }) {
     return () => clearInterval(id);
   }, [state.lastResetDate, state.activeSprint.sprintStartDate]);
 
-  // ── 4. IST Sunday 11:59 PM Auto-Submit (mount + every 60s interval) ─────────
+  // ── 4. IST Sunday 11:58 PM Weekly Auto-Submit (mount + every 60s interval) ───
   useEffect(() => {
     const check = () => {
       if (state.activeSprint.sprintStartDate && isSprintExpired(state.activeSprint.sprintStartDate)) {
@@ -734,6 +862,23 @@ export function AppProvider({ children }) {
     const id = setInterval(check, 60000);
     return () => clearInterval(id);
   }, [state.activeSprint.sprintStartDate]);
+
+  // ── 5. IST 11:55 PM Daily Auto-Submit — finalize today + send report (no wait).
+  // Fires 3 min before the 11:58 weekly auto-submit so on Sunday the daily report goes out
+  // first, then the weekly (whose finalizedToday guard avoids double-counting today).
+  useEffect(() => {
+    const check = () => {
+      if (!state.activeSprint.sprintStartDate) return;
+      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const today = istNow.toLocaleDateString('en-CA');
+      if (istNow.getHours() === 23 && istNow.getMinutes() >= 55 && state.dailyFinalizedDate !== today) {
+        dispatch({ type: 'DAILY_SUBMIT' });
+      }
+    };
+    check();
+    const id = setInterval(check, 30000);
+    return () => clearInterval(id);
+  }, [state.activeSprint.sprintStartDate, state.dailyFinalizedDate]);
 
   const questLookup = useMemo(() => buildQuestLookup(state.blueprint, state.focusItems), [state.blueprint, state.focusItems]);
   const totalEP = useMemo(() => calcTotalEP(questLookup, state.activeSprint.selectedQuestIds), [questLookup, state.activeSprint.selectedQuestIds]);
@@ -752,6 +897,7 @@ export function AppProvider({ children }) {
   }, [state.activeSprint.selectedQuestIds, questLookup]);
 
   const isLockdown = false;
+  const dailyLocked = state.dailyFinalizedDate === getISTDate();
 
   return (
     <AppContext.Provider value={{
@@ -763,6 +909,7 @@ export function AppProvider({ children }) {
       floor01EP,
       heroInfo,
       dailyProgress,
+      dailyLocked,
       isRoomActive,
       isLockdown,
       MAX_EP,
