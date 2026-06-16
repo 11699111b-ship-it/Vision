@@ -6,7 +6,7 @@ import { useAppContext } from '../context/AppContext';
 function getVoltData(appView, floor01EP, upkeepMin, selectedCount) {
   if (appView === 'planning') {
     return {
-      text: `Good morning, Anurag! Allocate your 20 EP and build your week.`,
+      text: `Good morning, Anurag! Allocate your 30 EP and build your week.`,
       urgent: false,
     };
   }

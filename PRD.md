@@ -2,7 +2,7 @@
 
 ## Product Vision
 
-A personal gamified productivity system that maps life goals across 6 domains onto floors of a virtual building. Each week, the user (Anurag) selects a subset of quests within a 20 EP budget, launches a "mission," and tracks daily/weekly completion. Results are logged to Google Sheets for long-term trend analysis.
+A personal gamified productivity system that maps life goals across 6 domains onto floors of a virtual building. Each week, the user (Anurag) selects a subset of quests within a 30 EP budget, launches a "mission," and tracks daily/weekly completion. Results are logged to Google Sheets for long-term trend analysis.
 
 ## User
 
@@ -25,13 +25,13 @@ A 6-floor structure where each floor is a life domain:
 Each room contains multiple **Goals** (e.g., "Overall Body Mastery"). Each goal contains multiple **Quests** (specific activities like "45-minute physical training"). Quests have frequencies: Daily, Weekly, Monthly, or Quarterly.
 
 ### Energy Points (EP)
-- Budget: 20 EP per week
+- Budget: 30 EP per week
 - Daily Power-Up goals: 2 EP each
 - Autopilot Bots goals: 2 EP each
 - Big Missions goals: 4 EP each
 - Locked goals: 0 EP (disabled, future use — e.g., "Future Family" room)
 
-Selecting a quest costs the EP of its parent goal. The system prevents exceeding 20 EP.
+Selecting a quest costs the EP of its parent goal. The system prevents exceeding 30 EP.
 
 ### Custom Goals
 Users can create custom goals within any unlocked room. Custom goals get a unique ID (`{roomId}-custom-{timestamp}`), user-chosen frequency, and tag (which determines EP cost). Custom goals persist in the blueprint's `customGoals` array per room and sync to GAS. They can be deleted via the × button in the All Floors blueprint section (`DELETE_CUSTOM_GOAL`) — deleting also removes the goal's quests from the active sprint selection and completion lists.

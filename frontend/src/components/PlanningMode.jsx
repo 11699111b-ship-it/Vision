@@ -198,7 +198,7 @@ export default function PlanningMode() {
         <div className="flex items-center gap-2">
           <HeroTag />
           <p style={{ fontSize: 11, color: '#8B8B8D', fontFamily: 'Space Mono, monospace', margin: 0 }}>
-            <span className="hidden sm:inline">· </span>20 EP
+            <span className="hidden sm:inline">· </span>30 EP
           </p>
           <StreakBadge />
           <MusicBtn />
