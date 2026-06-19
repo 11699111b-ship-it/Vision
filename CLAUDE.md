@@ -31,3 +31,22 @@ All researched improvement ideas and implementation plans live in:
 **`update-ideas.md`** (project root)
 
 Read this file ONLY when the user explicitly asks about ideas, planned features, or what's next — not on every session start.
+
+## 🔜 Next Session — Work Queue (added 2026-06-19)
+Read these when resuming. Specs live in `docs/superpowers/specs/`:
+
+1. **Sync data-loss bug — FIX DONE on branch `fix/sheet-sync-ssot`, NOT yet merged/deployed.**
+   Live site was rolled back to old stable code. The fix (sheet = single source of truth +
+   `sendBeacon` flush + dirty-replay + stale-client guard) is committed with passing tests but
+   awaits the user's on-device verification before merge + deploy. Specs:
+   `2026-06-19-sheet-sync-ssot-design.md`. Guard logic mirrored in `gas-update-weekly-goals.gs`
+   (`shouldAcceptStateWrite`) and `frontend/src/utils/syncGuard.js` — **keep them in sync**;
+   redeploying GAS requires pasting the script into the Apps Script editor.
+2. **Feature — HQ stats view:** `2026-06-19-feature-hq-stats-view.md` (designed, no GAS change).
+3. **Feature — daily↔weekly task flip (once/week):** `2026-06-19-feature-daily-weekly-flip.md`
+   (designed, no GAS change).
+4. **Feature — focus config in sheet, manual CRUD only:** `2026-06-19-feature-manual-focus-crud-sheet.md`
+   (NEW — needs a brainstorming pass before building).
+
+⚠️ SW cache name in `frontend/public/sw.js` must be bumped on every deploy (now
+`superhero-hq-v3-...`) or returning PWAs serve stale bundles.
