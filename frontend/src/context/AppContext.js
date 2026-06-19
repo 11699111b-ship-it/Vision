@@ -215,6 +215,7 @@ export function reducer(state, action) {
         appView: 'tracking',
         launchError: null,
         dailyFinalizedDate: null, // fresh mission — Daily Submit available again (even same day)
+        _sprintEnded: false, // an active sprint now exists — protect it from stale planning writes
         activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() },
         _pendingGoalLog: { goalNames },
         _pendingTrackerLaunch: { quests: trackerQuests },
@@ -238,6 +239,7 @@ export function reducer(state, action) {
         ...state,
         appView: 'planning',
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
       };
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
@@ -288,6 +290,7 @@ export function reducer(state, action) {
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
         _pendingWeeklyReport: { week: weekRange, percentage, xpEarned: isPerfect ? 1 : 0, daysLogged: allDailyScores.length, quests: trackerQuests },
@@ -307,6 +310,7 @@ export function reducer(state, action) {
           appView: 'planning',
           autoSubmittedMessage: 'Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
           dailyFinalizedDate: null,
+          _sprintEnded: true,
           activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         };
       }
@@ -356,6 +360,7 @@ export function reducer(state, action) {
         avgCompletion: newAvg,
         autoSubmittedMessage: `Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
         _pendingWeeklyReport: { week: formatWeekRange(activeSprint.sprintStartDate), percentage, xpEarned: isPerfect ? 1 : 0, daysLogged: allDailyScores.length, quests: trackerQuests },
@@ -525,6 +530,7 @@ export function reducer(state, action) {
         ...state,
         launchError: null,
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         activeSprint: {
           selectedQuestIds: [],
           completedTodayIds: [],
@@ -813,6 +819,10 @@ export function AppProvider({ children }) {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
 
+    // Note: _sprintEnded is intentionally KEPT in toSave so it persists to
+    // localStorage and rides along in the sheet payload (via buildGasPayload).
+    // This lets the sheet guard distinguish a legit submit/reset (clears the
+    // sprint) from a stale planning client (rejected), even on an offline replay.
     const { appView, launchError, submissionResult, dailySubmissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, _pendingTrackerSubmit, _pendingDailyReport, _pendingWeeklyReport, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
     toSave.lastSavedAt = Date.now();
@@ -825,6 +835,7 @@ export function AppProvider({ children }) {
     } catch { /* ignore */ }
 
     // Lightweight sheet payload (blueprint → customGoals, + daily snapshot).
+    // _sprintEnded rides along via the spread inside buildGasPayload.
     const gasPayload = buildGasPayload(toSave);
     pendingPayloadRef.current = gasPayload; // captured for the beacon flush on hide
 
