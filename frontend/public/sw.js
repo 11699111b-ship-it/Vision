@@ -1,7 +1,9 @@
 // Superhero HQ — Service Worker
 // Offline caching + IST-accurate local notifications
 
-const CACHE = 'superhero-hq-v2';
+// Bump this on every deploy so the new SW purges the old cache (the activate
+// handler deletes any cache whose name !== CACHE) and clients converge on fresh code.
+const CACHE = 'superhero-hq-v6-20260624-debughidden';
 const BASE = new URL('.', self.location).pathname;
 
 const APP_SHELL = [

@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import INITIAL_BLUEPRINT, { EP_COSTS } from '../data/blueprint';
 import { getISTDate, getISTHour, isSprintExpired, formatWeekRange } from '../utils/istUtils';
+import { dbg, fingerprint, diffFingerprints, BUILD_STAMP } from '../utils/debugLog';
 
 const STORAGE_KEY = 'superhero_hq_v2';
+const DIRTY_KEY = 'superhero_hq_dirty'; // set while a local save is unacknowledged by the sheet
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzyZTaQOLvFsmD1DCZbKgYtbzHOXi4iA8gMFEI4yV9N6Vr5pTlPOAwR_NM-L_w_nTtF/exec';
 
 export const MAX_EP = 30;
@@ -55,6 +57,14 @@ export function getHeroInfo(xp) {
   if (xp >= 3) return { level: 3, name: 'Hero', emoji: '🦸' };
   if (xp >= 1) return { level: 2, name: 'Sidekick', emoji: '🏃' };
   return { level: 1, name: 'Civilian', emoji: '🧍' };
+}
+
+// GAS's doGet can lag behind a just-completed doPost (read-after-write lag) —
+// the fetch resolving does not mean the sheet is readably up to date yet. A
+// sheet snapshot older than what we already trust locally must be rejected,
+// or an in-flight tick gets reverted by its own stale echo.
+export function isStaleSheetRead(localSavedAt, sheetSavedAt) {
+  return localSavedAt != null && sheetSavedAt != null && sheetSavedAt < localSavedAt;
 }
 
 function mergeBlueprint(initial, saved) {
@@ -121,6 +131,10 @@ export function reducer(state, action) {
       }
       let view = p.appView === 'welcome' ? 'planning' : (p.appView || 'planning');
       if (hasMission) view = 'tracking';
+      // A missionless state can never be 'tracking' — a stale appView:'tracking'
+      // (e.g. left over after an auto-submit cleared the sprint) would otherwise
+      // strand the user on an empty tracking screen with no submit button.
+      else if (view === 'tracking') view = 'planning';
       // Reconstruct blueprint: if full blueprint present (localStorage), use it.
       // If only _customGoals (GAS), inject them into INITIAL_BLUEPRINT.
       let bp;
@@ -214,6 +228,7 @@ export function reducer(state, action) {
         appView: 'tracking',
         launchError: null,
         dailyFinalizedDate: null, // fresh mission — Daily Submit available again (even same day)
+        _sprintEnded: false, // an active sprint now exists — protect it from stale planning writes
         activeSprint: { ...activeSprint, sprintStartDate: new Date().toISOString() },
         _pendingGoalLog: { goalNames },
         _pendingTrackerLaunch: { quests: trackerQuests },
@@ -237,6 +252,7 @@ export function reducer(state, action) {
         ...state,
         appView: 'planning',
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [], questDailyCompletionCounts: {} },
       };
       const dailyIds = selectedQuestIds.filter(id => lookup[id]?.quest.frequency === 'Daily');
@@ -287,6 +303,7 @@ export function reducer(state, action) {
         avgCompletion: newAvg,
         submissionResult: { percentage, isPerfect },
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
         _pendingWeeklyReport: { week: weekRange, percentage, xpEarned: isPerfect ? 1 : 0, daysLogged: allDailyScores.length, quests: trackerQuests },
@@ -306,6 +323,7 @@ export function reducer(state, action) {
           appView: 'planning',
           autoSubmittedMessage: 'Anurag, your previous sprint automatically concluded at midnight IST. Your HQ is ready for a new week.',
           dailyFinalizedDate: null,
+          _sprintEnded: true,
           activeSprint: { selectedQuestIds: [], completedTodayIds: [], completedWeeklyIds: [], sprintStartDate: null, yesterdayProgress: null, dailyCompletionHistory: [] },
         };
       }
@@ -353,8 +371,11 @@ export function reducer(state, action) {
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
-        autoSubmittedMessage: `Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
+        // Use the same result overlay as a manual submit (not a plain toast), and
+        // route straight to planning below — no empty active-protocols screen.
+        submissionResult: { percentage, isPerfect },
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
         _pendingTrackerSubmit: { quests: trackerQuests },
         _pendingWeeklyReport: { week: formatWeekRange(activeSprint.sprintStartDate), percentage, xpEarned: isPerfect ? 1 : 0, daysLogged: allDailyScores.length, quests: trackerQuests },
@@ -524,6 +545,7 @@ export function reducer(state, action) {
         ...state,
         launchError: null,
         dailyFinalizedDate: null,
+        _sprintEnded: true,
         activeSprint: {
           selectedQuestIds: [],
           completedTodayIds: [],
@@ -685,11 +707,45 @@ function extractCustomGoals(blueprint) {
 // ── POST to GAS via form-encoded fetch ──────────────────────────────────────
 // GAS processes doPost BEFORE returning 302 redirect. The redirect may trigger
 // a CORS error in the console — that's expected and harmless (data is already written).
+// Returns the (always-resolving) fetch promise so callers can act after the write.
 function postToGAS(payload) {
-  const json = JSON.stringify(payload);
   const params = new URLSearchParams();
-  params.append('payload', json);
-  fetch(GAS_URL, { method: 'POST', body: params }).catch(() => {});
+  params.append('payload', JSON.stringify(payload));
+  return fetch(GAS_URL, { method: 'POST', body: params }).catch(() => {});
+}
+
+// ── Flush the latest state on page hide — survives iOS suspending the PWA ─────
+// sendBeacon is delivered by the browser even after the page is frozen/closed,
+// closing the window where a debounced save would otherwise be dropped.
+function beaconToGAS(payload) {
+  try {
+    const params = new URLSearchParams();
+    params.append('payload', JSON.stringify(payload));
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      navigator.sendBeacon(GAS_URL, params);
+    } else {
+      fetch(GAS_URL, { method: 'POST', body: params, keepalive: true }).catch(() => {});
+    }
+  } catch { /* ignore */ }
+}
+
+// ── Build the lightweight sheet payload from a full saved-state object ────────
+// Replaces the ~78KB blueprint with just customGoals (<2KB) and attaches the
+// daily snapshot for the accountability "Daily Log" sheet. Used by both the
+// debounced save and the dirty-replay on load.
+function buildGasPayload(saved) {
+  const payload = { ...saved, _customGoals: extractCustomGoals(saved.blueprint) };
+  delete payload.blueprint;
+  const sprint = saved.activeSprint;
+  if (sprint && sprint.sprintStartDate) {
+    const lk = buildQuestLookup(saved.blueprint, saved.focusItems);
+    const completed = sprint.completedTodayIds || [];
+    const dIds = (sprint.selectedQuestIds || []).filter(id => lk[id]?.quest.frequency === 'Daily');
+    const done = dIds.filter(id => completed.includes(id)).map(id => lk[id]?.quest.text).filter(Boolean);
+    const missed = dIds.filter(id => !completed.includes(id)).map(id => lk[id]?.quest.text).filter(Boolean);
+    payload._daily = { date: getISTDate(), pct: dIds.length > 0 ? Math.round((done.length / dIds.length) * 100) : 0, done, missed };
+  }
+  return payload;
 }
 
 // ── Log a weekly mission result to GAS "Weekly Logs" sheet ──────────────────
@@ -697,9 +753,16 @@ function logToGAS(logEntry) {
   postToGAS({ action: 'log', ...logEntry });
 }
 
-// ── Async GAS save (debounced, fire-and-forget) ──────────────────────────────
-function saveToGAS(data) {
-  postToGAS(data);
+// ── Async GAS state save — clears the dirty flag once the sheet acknowledges ──
+function saveToGAS(payload, savedAt) {
+  postToGAS(payload).then(() => {
+    try {
+      // Only clear if no newer save has superseded this one.
+      if (localStorage.getItem(DIRTY_KEY) === String(savedAt)) {
+        localStorage.removeItem(DIRTY_KEY);
+      }
+    } catch { /* ignore */ }
+  });
 }
 
 export function AppProvider({ children }) {
@@ -707,80 +770,142 @@ export function AppProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const saveTimerRef = useRef(null);
   const initialLoadDone = useRef(false);
+  const pendingPayloadRef = useRef(null);  // latest sheet payload, for the beacon flush
+  const syncingRef = useRef(false);        // guards against overlapping reconciles
+  const lastVisibleSyncRef = useRef(0);    // debounces rapid hidden/visible toggles
+  // Set right before any LOAD_STATE dispatch caused by US adopting external data
+  // (paint-from-cache or sheet reconcile) — NOT a user edit. The save effect
+  // below must not treat that state change as a new edit to persist/POST back,
+  // or an adopted (possibly stale) snapshot gets re-armed as dirty and echoed
+  // back to the sheet, durably overwriting a real edit with stale data.
+  const skipNextSaveRef = useRef(false);
 
-  // ── 1. Load state: localStorage first (instant), GAS fallback (cross-device) ─
+  // ── Reconcile with the sheet (the single source of truth) ───────────────────
+  // If localStorage holds an unacknowledged write (dirty), replay it to the sheet
+  // and KEEP local — local is the latest. Otherwise adopt the sheet wholesale.
+  // No merge step → a tick/untick is never lost and never resurrected.
+  const syncFromSheet = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    try {
+      let dirty = null, local = null;
+      try {
+        dirty = localStorage.getItem(DIRTY_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) local = JSON.parse(raw);
+      } catch { /* ignore */ }
+
+      dbg('sync-start', { dirty: !!dirty, hasLocal: !!local, local: fingerprint(local) });
+
+      if (dirty && local) {
+        // Push the unacknowledged local write up so the sheet matches local, then
+        // keep local. Skip adopting the sheet this cycle — local is authoritative.
+        dbg('sync-branch-DIRTY-REPLAY', { keepLocal: fingerprint(local) });
+        await postToGAS(buildGasPayload(local));
+        try { if (localStorage.getItem(DIRTY_KEY) === dirty) localStorage.removeItem(DIRTY_KEY); } catch { /* ignore */ }
+        return;
+      }
+
+      // Clean → adopt the sheet.
+      dbg('sync-branch-ADOPT-SHEET', {});
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(GAS_URL, { signal: controller.signal });
+      clearTimeout(tid);
+      const data = await res.json();
+      if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
+        dbg('sheet-fetched', { sheet: fingerprint(data), diffVsLocal: diffFingerprints(local, data) });
+        if (isStaleSheetRead(local?.lastSavedAt, data.lastSavedAt)) {
+          dbg('sheet-stale-ignored', { localSavedAt: local?.lastSavedAt, sheetSavedAt: data.lastSavedAt });
+        } else {
+          skipNextSaveRef.current = true;
+          dispatch({ type: 'LOAD_STATE', payload: data });
+        }
+      } else {
+        dbg('sheet-empty-ignored', { got: data ? Object.keys(data) : null });
+      }
+    } catch { /* ignore */ }
+    finally { syncingRef.current = false; }
+  }, []);
+
+  // ── 1. Initial load: paint from localStorage instantly, then trust the sheet ─
   useEffect(() => {
-    const load = async () => {
-      let localTimestamp = 0;
-      let hadLocalData = false;
-
-      // 1a. Load localStorage immediately (fast, offline-resilient)
+    const init = async () => {
+      const swUrl = (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller?.scriptURL) || 'no-controller';
+      dbg('boot', { build: BUILD_STAMP, sw: swUrl, dirty: localStorage.getItem(DIRTY_KEY) || null });
+      if (typeof caches !== 'undefined') {
+        caches.keys().then(keys => dbg('sw-caches', { keys })).catch(() => {});
+      }
+      let painted = false;
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         const hasEntered = localStorage.getItem('hq_entered');
         if (raw && hasEntered) {
-          const parsed = JSON.parse(raw);
-          localTimestamp = parsed.lastSavedAt || 0;
-          hadLocalData = true;
-          dispatch({ type: 'LOAD_STATE', payload: parsed });
-          setIsLoading(false);
-          // Don't return — still check GAS for newer state from another device
+          dbg('paint-local', { local: fingerprint(JSON.parse(raw)) });
+          skipNextSaveRef.current = true;
+          dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
+          painted = true;
+          setIsLoading(false); // show cached state immediately; sheet reconciles next
+        } else {
+          dbg('paint-skip', { hasRaw: !!raw, hasEntered: !!hasEntered });
         }
       } catch { /* ignore */ }
-
-      // 1b. Fetch GAS — use only when GAS is strictly newer than local data.
-      // If local exists but has no timestamp (pre-lastSavedAt format), skip GAS
-      // to avoid blindly overwriting with stale cross-device data.
-      try {
-        const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(GAS_URL, { signal: controller.signal });
-        clearTimeout(tid);
-        const data = await res.json();
-        if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
-          const gasTimestamp = data.lastSavedAt || 0;
-          // Use GAS when: no local data at all, OR GAS timestamp is strictly newer.
-          // Skip GAS if local exists but has no timestamp (old format) — local wins.
-          const useGAS = !hadLocalData || (localTimestamp > 0 && gasTimestamp > localTimestamp);
-          if (useGAS) {
-            dispatch({ type: 'LOAD_STATE', payload: data });
-          }
-        }
-      } catch { /* ignore */ }
-
-      setIsLoading(false);
+      await syncFromSheet();
+      if (!painted) setIsLoading(false);
     };
-    load();
-  }, []);
+    init();
+  }, [syncFromSheet]);
 
   // ── 2. Save state to GAS (debounced 3s) + localStorage (immediate) ─────────
   useEffect(() => {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
+    if (skipNextSaveRef.current) { skipNextSaveRef.current = false; dbg('save-skip-adopted-state', {}); return; }
 
+    // Note: _sprintEnded is intentionally KEPT in toSave so it persists to
+    // localStorage and rides along in the sheet payload (via buildGasPayload).
+    // This lets the sheet guard distinguish a legit submit/reset (clears the
+    // sprint) from a stale planning client (rejected), even on an offline replay.
     const { appView, launchError, submissionResult, dailySubmissionResult, autoSubmittedMessage, _pendingLog, _pendingGoalLog, _pendingTrackerLaunch, _pendingTrackerSubmit, _pendingDailyReport, _pendingWeeklyReport, ...toSave } = state;
     toSave.appView = appView === 'welcome' ? 'planning' : appView;
     toSave.lastSavedAt = Date.now();
 
-    // localStorage — full state (immediate, offline resilient)
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave)); } catch { /* ignore */ }
+    // localStorage — full state (immediate) + dirty flag: this write is not yet
+    // acknowledged by the sheet, so a reconcile must replay it rather than clobber it.
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+      localStorage.setItem(DIRTY_KEY, String(toSave.lastSavedAt));
+    } catch { /* ignore */ }
 
-    // GAS — lightweight: replace full blueprint with just customGoals (~78KB → <2KB)
-    const gasPayload = { ...toSave, _customGoals: extractCustomGoals(toSave.blueprint) };
-    delete gasPayload.blueprint;
+    // Lightweight sheet payload (blueprint → customGoals, + daily snapshot).
+    // _sprintEnded rides along via the spread inside buildGasPayload.
+    const gasPayload = buildGasPayload(toSave);
+    pendingPayloadRef.current = gasPayload; // captured for the beacon flush on hide
 
-    // Daily snapshot for the accountability "Daily Log" sheet (payload-only — not persisted to state/localStorage).
-    // Keeps today's row fresh on every save so the nightly GAS report works even if the app is closed at midnight.
-    if (state.activeSprint.sprintStartDate) {
-      const lk = buildQuestLookup(state.blueprint, state.focusItems);
-      const dIds = state.activeSprint.selectedQuestIds.filter(id => lk[id]?.quest.frequency === 'Daily');
-      const done = dIds.filter(id => state.activeSprint.completedTodayIds.includes(id)).map(id => lk[id]?.quest.text).filter(Boolean);
-      const missed = dIds.filter(id => !state.activeSprint.completedTodayIds.includes(id)).map(id => lk[id]?.quest.text).filter(Boolean);
-      gasPayload._daily = { date: getISTDate(), pct: dIds.length > 0 ? Math.round((done.length / dIds.length) * 100) : 0, done, missed };
-    }
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => saveToGAS(gasPayload), 3000);
+    saveTimerRef.current = setTimeout(() => saveToGAS(gasPayload, toSave.lastSavedAt), 3000);
   }, [state, isLoading]);
+
+  // ── 2a. Flush on hide (beacon survives iOS suspend) + re-sync on foreground ──
+  useEffect(() => {
+    const flush = () => { if (pendingPayloadRef.current) beaconToGAS(pendingPayloadRef.current); };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        flush();
+      } else if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        if (now - lastVisibleSyncRef.current < 3000) return; // ignore rapid toggles
+        lastVisibleSyncRef.current = now;
+        syncFromSheet(); // adopt latest sheet before this client can write stale data
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [syncFromSheet]);
 
   // ── 2b. Fire weekly log POST when a mission is submitted ────────────────────
   useEffect(() => {

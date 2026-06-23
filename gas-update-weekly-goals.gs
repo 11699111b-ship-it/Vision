@@ -71,7 +71,16 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Default: save state. Also capture the daily snapshot (if present) into the Daily Log sheet.
+    // Default: save state — but protect an active sprint from being wiped by a
+    // stale client (e.g. a backgrounded browser tab still on the planning screen).
+    var stored = null;
+    try { var cur = stateSheet.getRange('A1').getValue(); if (cur) stored = JSON.parse(cur); } catch (e3) {}
+    if (!shouldAcceptStateWrite(data, stored)) {
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: 'rejected_stale' })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+    // Also capture the daily snapshot (if present) into the Daily Log sheet.
     if (data._daily) { try { upsertDailyLog(ss, data._daily); } catch (e2) {} }
     stateSheet.getRange('A1').setValue(JSON.stringify(data));
     return ContentService.createTextOutput(
@@ -91,6 +100,23 @@ function doGet(e) {
   return ContentService.createTextOutput(
     data || JSON.stringify({})
   ).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── Sync write guard ─────────────────────────────────────────────────────────
+// Mirror of frontend/src/utils/syncGuard.js — keep the two in sync.
+// Protects an active sprint from being clobbered by a stale no-sprint (planning)
+// client. Submit/auto-submit/reset carry _sprintEnded:true to legitimately clear it.
+function hasActiveSprint_(state) {
+  var s = (state && state.activeSprint) || {};
+  return !!s.sprintStartDate && (s.selectedQuestIds || []).length > 0;
+}
+function shouldAcceptStateWrite(incoming, stored) {
+  if (!incoming || typeof incoming !== 'object') return false;
+  if (!stored) return true;
+  if (hasActiveSprint_(stored) && !hasActiveSprint_(incoming) && !incoming._sprintEnded) {
+    return false;
+  }
+  return true;
 }
 
 /**
