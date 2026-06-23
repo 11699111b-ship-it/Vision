@@ -3,7 +3,7 @@
 
 // Bump this on every deploy so the new SW purges the old cache (the activate
 // handler deletes any cache whose name !== CACHE) and clients converge on fresh code.
-const CACHE = 'superhero-hq-v3-20260619';
+const CACHE = 'superhero-hq-v4-20260624-dbg';
 const BASE = new URL('.', self.location).pathname;
 
 const APP_SHELL = [
