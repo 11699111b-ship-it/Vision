@@ -6,14 +6,15 @@ import { MusicProvider, useMusicContext } from './context/MusicContext';
 import { usePWA } from './hooks/usePWA';
 import WelcomeScreen from './components/WelcomeScreen';
 import PlanningMode from './components/PlanningMode';
-import TrackingMode from './components/TrackingMode';
+import TrackingMode, { SubmissionOverlay } from './components/TrackingMode';
 import HQVisitMode from './components/HQVisitMode';
 import VoltMascot from './components/VoltMascot';
+import DebugOverlay from './components/DebugOverlay';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
 function AppContent() {
-  const { appView, autoSubmittedMessage, dispatch } = useAppContext();
+  const { appView, autoSubmittedMessage, submissionResult, dispatch } = useAppContext();
   const { syncMusic } = useMusicContext();
   usePWA();
 
@@ -49,6 +50,12 @@ function AppContent() {
         {appView === 'hq-visit' && <HQVisitMode key="hq-visit" />}
       </AnimatePresence>
       {appView !== 'welcome' && <VoltMascot />}
+      <AnimatePresence>
+        {submissionResult && (
+          <SubmissionOverlay result={submissionResult} onClose={() => dispatch({ type: 'CLEAR_SUBMISSION' })} />
+        )}
+      </AnimatePresence>
+      <DebugOverlay />
       <Toaster position="top-center" />
     </div>
   );

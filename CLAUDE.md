@@ -26,6 +26,20 @@ NOT `react-scripts` — this project uses craco.
 ## GAS Deployment
 URL stays the same. To update the script: paste new code into Apps Script editor and redeploy as a new version. A curl POST returning "Page not found" HTML is expected (302 redirect after doPost processes — harmless).
 
+## Debug overlay (kept, hidden by default)
+On-screen sync diagnostics for phone PWAs (no tethered DevTools needed):
+`frontend/src/utils/debugLog.js` (ring-buffer logger, `dbg()` calls live in `AppContext.js`'s
+load/sync path) + `frontend/src/components/DebugOverlay.jsx` (renders the log).
+- **Logging always runs** — cheap, capped ring buffer in localStorage (`hq_debug_log`).
+- **The on-screen 🐞 button is hidden by default.** To reveal it: tap the top-right corner of
+  the screen 5x within 2 seconds. Same gesture hides it again. State persists in
+  `localStorage['hq_debug_enabled']`.
+- Once revealed, tap 🐞 (bottom-left) to open the log viewer: refresh / clear / copy buttons.
+- Useful for diagnosing sync flips/reverts — see the `fingerprint()`/`diffFingerprints()` helpers
+  in `debugLog.js` for what's tracked (xp, streak, view, sprint state, doneToday, lastSavedAt).
+- Don't strip this code casually — it's how the 2026-06-24 stale-sheet-read bug (tick reverting
+  on restart) was diagnosed and confirmed fixed. Only remove if it becomes a maintenance burden.
+
 ## Update Ideas & Planned Features
 All researched improvement ideas and implementation plans live in:
 **`update-ideas.md`** (project root)

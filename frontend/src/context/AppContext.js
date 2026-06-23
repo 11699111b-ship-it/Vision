@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import INITIAL_BLUEPRINT, { EP_COSTS } from '../data/blueprint';
 import { getISTDate, getISTHour, isSprintExpired, formatWeekRange } from '../utils/istUtils';
+import { dbg, fingerprint, diffFingerprints, BUILD_STAMP } from '../utils/debugLog';
 
 const STORAGE_KEY = 'superhero_hq_v2';
 const DIRTY_KEY = 'superhero_hq_dirty'; // set while a local save is unacknowledged by the sheet
@@ -56,6 +57,14 @@ export function getHeroInfo(xp) {
   if (xp >= 3) return { level: 3, name: 'Hero', emoji: '🦸' };
   if (xp >= 1) return { level: 2, name: 'Sidekick', emoji: '🏃' };
   return { level: 1, name: 'Civilian', emoji: '🧍' };
+}
+
+// GAS's doGet can lag behind a just-completed doPost (read-after-write lag) —
+// the fetch resolving does not mean the sheet is readably up to date yet. A
+// sheet snapshot older than what we already trust locally must be rejected,
+// or an in-flight tick gets reverted by its own stale echo.
+export function isStaleSheetRead(localSavedAt, sheetSavedAt) {
+  return localSavedAt != null && sheetSavedAt != null && sheetSavedAt < localSavedAt;
 }
 
 function mergeBlueprint(initial, saved) {
@@ -122,6 +131,10 @@ export function reducer(state, action) {
       }
       let view = p.appView === 'welcome' ? 'planning' : (p.appView || 'planning');
       if (hasMission) view = 'tracking';
+      // A missionless state can never be 'tracking' — a stale appView:'tracking'
+      // (e.g. left over after an auto-submit cleared the sprint) would otherwise
+      // strand the user on an empty tracking screen with no submit button.
+      else if (view === 'tracking') view = 'planning';
       // Reconstruct blueprint: if full blueprint present (localStorage), use it.
       // If only _customGoals (GAS), inject them into INITIAL_BLUEPRINT.
       let bp;
@@ -358,7 +371,9 @@ export function reducer(state, action) {
         xp: isPerfect ? state.xp + 1 : state.xp,
         sprintCount: newCount,
         avgCompletion: newAvg,
-        autoSubmittedMessage: `Anurag, your previous sprint automatically concluded at midnight IST with a score of ${percentage}%. Your HQ is ready for a new week.`,
+        // Use the same result overlay as a manual submit (not a plain toast), and
+        // route straight to planning below — no empty active-protocols screen.
+        submissionResult: { percentage, isPerfect },
         dailyFinalizedDate: null,
         _sprintEnded: true,
         _pendingLog: { sprintStartDate: activeSprint.sprintStartDate, percentage, xpEarned: isPerfect ? 1 : 0, total, completed: Math.round(dailyContribution + weeklyContribution), goalNames },
@@ -758,6 +773,12 @@ export function AppProvider({ children }) {
   const pendingPayloadRef = useRef(null);  // latest sheet payload, for the beacon flush
   const syncingRef = useRef(false);        // guards against overlapping reconciles
   const lastVisibleSyncRef = useRef(0);    // debounces rapid hidden/visible toggles
+  // Set right before any LOAD_STATE dispatch caused by US adopting external data
+  // (paint-from-cache or sheet reconcile) — NOT a user edit. The save effect
+  // below must not treat that state change as a new edit to persist/POST back,
+  // or an adopted (possibly stale) snapshot gets re-armed as dirty and echoed
+  // back to the sheet, durably overwriting a real edit with stale data.
+  const skipNextSaveRef = useRef(false);
 
   // ── Reconcile with the sheet (the single source of truth) ───────────────────
   // If localStorage holds an unacknowledged write (dirty), replay it to the sheet
@@ -774,22 +795,34 @@ export function AppProvider({ children }) {
         if (raw) local = JSON.parse(raw);
       } catch { /* ignore */ }
 
+      dbg('sync-start', { dirty: !!dirty, hasLocal: !!local, local: fingerprint(local) });
+
       if (dirty && local) {
         // Push the unacknowledged local write up so the sheet matches local, then
         // keep local. Skip adopting the sheet this cycle — local is authoritative.
+        dbg('sync-branch-DIRTY-REPLAY', { keepLocal: fingerprint(local) });
         await postToGAS(buildGasPayload(local));
         try { if (localStorage.getItem(DIRTY_KEY) === dirty) localStorage.removeItem(DIRTY_KEY); } catch { /* ignore */ }
         return;
       }
 
       // Clean → adopt the sheet.
+      dbg('sync-branch-ADOPT-SHEET', {});
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(GAS_URL, { signal: controller.signal });
       clearTimeout(tid);
       const data = await res.json();
       if (data && (data.xp !== undefined || data.streak !== undefined || data.activeSprint)) {
-        dispatch({ type: 'LOAD_STATE', payload: data });
+        dbg('sheet-fetched', { sheet: fingerprint(data), diffVsLocal: diffFingerprints(local, data) });
+        if (isStaleSheetRead(local?.lastSavedAt, data.lastSavedAt)) {
+          dbg('sheet-stale-ignored', { localSavedAt: local?.lastSavedAt, sheetSavedAt: data.lastSavedAt });
+        } else {
+          skipNextSaveRef.current = true;
+          dispatch({ type: 'LOAD_STATE', payload: data });
+        }
+      } else {
+        dbg('sheet-empty-ignored', { got: data ? Object.keys(data) : null });
       }
     } catch { /* ignore */ }
     finally { syncingRef.current = false; }
@@ -798,14 +831,23 @@ export function AppProvider({ children }) {
   // ── 1. Initial load: paint from localStorage instantly, then trust the sheet ─
   useEffect(() => {
     const init = async () => {
+      const swUrl = (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller?.scriptURL) || 'no-controller';
+      dbg('boot', { build: BUILD_STAMP, sw: swUrl, dirty: localStorage.getItem(DIRTY_KEY) || null });
+      if (typeof caches !== 'undefined') {
+        caches.keys().then(keys => dbg('sw-caches', { keys })).catch(() => {});
+      }
       let painted = false;
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         const hasEntered = localStorage.getItem('hq_entered');
         if (raw && hasEntered) {
+          dbg('paint-local', { local: fingerprint(JSON.parse(raw)) });
+          skipNextSaveRef.current = true;
           dispatch({ type: 'LOAD_STATE', payload: JSON.parse(raw) });
           painted = true;
           setIsLoading(false); // show cached state immediately; sheet reconciles next
+        } else {
+          dbg('paint-skip', { hasRaw: !!raw, hasEntered: !!hasEntered });
         }
       } catch { /* ignore */ }
       await syncFromSheet();
@@ -818,6 +860,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (isLoading) return;
     if (!initialLoadDone.current) { initialLoadDone.current = true; return; }
+    if (skipNextSaveRef.current) { skipNextSaveRef.current = false; dbg('save-skip-adopted-state', {}); return; }
 
     // Note: _sprintEnded is intentionally KEPT in toSave so it persists to
     // localStorage and rides along in the sheet payload (via buildGasPayload).

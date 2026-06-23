@@ -164,7 +164,7 @@ function TaskCard({ quest, goal, isCompleted, onToggle, locked }) {
 }
 
 // ── Submission overlay ────────────────────────────────────────────────────────
-function SubmissionOverlay({ result, onClose, title = 'WEEKLY MISSION COMPLETE', buttonText = 'RETURN TO HQ', isDaily = false }) {
+export function SubmissionOverlay({ result, onClose, title = 'WEEKLY MISSION COMPLETE', buttonText = 'RETURN TO HQ', isDaily = false }) {
   const { percentage, isPerfect } = result;
   const w = typeof window !== 'undefined' ? window.innerWidth : 800;
   const h = typeof window !== 'undefined' ? window.innerHeight : 600;
@@ -435,11 +435,9 @@ export default function TrackingMode() {
         </motion.button>
       </div>
 
-      {/* Submission overlays */}
+      {/* Daily submission overlay. The weekly result overlay is rendered at the
+          app root (App.js) so it also shows after an auto-submit routes to planning. */}
       <AnimatePresence>
-        {submissionResult && (
-          <SubmissionOverlay result={submissionResult} onClose={() => dispatch({ type: 'CLEAR_SUBMISSION' })} />
-        )}
         {dailySubmissionResult && !submissionResult && (
           <SubmissionOverlay
             result={dailySubmissionResult}
